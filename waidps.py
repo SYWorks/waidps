@@ -2528,7 +2528,6 @@ def AttackWPSProc(TargetMAC,TargetChannel,ClentList,Auto):
         Para=CH5GHZ + "--dh-small --win7 "
     if usr_resp=="1":
         Para=CH5GHZ + "--dh-small --nack --eap-terminate --win7 -r 3:180 -d 3"
-    print "Para : " + str(Para)
     __builtin__.TStart=Now()
     printc ("i",fcolor.BGreen + "Time Start : " + fcolor.SWhite + str(__builtin__.TStart),"")
     print ""

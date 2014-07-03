@@ -2537,7 +2537,6 @@ def AttackWPSProc(TargetMAC,TargetChannel,ClentList,Auto):
     ps=subprocess.Popen(cmdLine , shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'),preexec_fn=os.setsid)		
     __builtin__.Sniffer=ps.pid
     cmdLine="xterm -geometry 100x10-0-200 -iconic -bg black -fg white -fn 5x8 -title 'WAIDPS - Auditing WPS [" + str(TargetMAC) + "' -e 'reaver -i " + str(__builtin__.SELECTED_ATK) + " -b " + str(__builtin__.ATTACK_AP_BSSID) + str(CH5GHZ) + " -c " + str(__builtin__.ATTACK_AP_CH) + str(Para) + " -a -vv -o " + str(__builtin__.WPS_File) + " | tee " + tmpdir + "WPS_Result.txt'" 
-    print "cmdLine : " + str(cmdLine)
     ps=subprocess.Popen(cmdLine , shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'),preexec_fn=os.setsid)		
     __builtin__.ProcID=ps.pid
     __builtin__.ProcID=WEPAttackMode("AAPC","","1")

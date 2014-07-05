@@ -5,6 +5,10 @@
 ## Written By SY Chua, syworks@gmail.com
 ##
 ## Current - WiFi Harvester & IDPS & Auditor
+## Addon - Updating AP & Station Detail with live monitoring
+## Changes
+## - Function RemoveColor
+## - Removed Encryption features (Since not using now)
 ##
 #############
 ## MODULES ##
@@ -19,28 +23,17 @@ import signal
 import random
 import urllib
 import shutil
+import re
 import readline
 import threading
 from signal import SIGINT, SIGTERM
 from subprocess import Popen, call, PIPE
 from math import floor
-try:
-  import hashlib
-except:
-  IMPORT_ERRMSG=IMPORT_ERRMSG + "      Error importing 'hashlib'\n"
-try:
-   from Crypto.Cipher import AES
-except:
-  IMPORT_ERRMSG=IMPORT_ERRMSG + "      Error importing 'AES'\n"
-try:
-  import base64
-except:
-  IMPORT_ERRMSG=IMPORT_ERRMSG + "      Error importing 'base64'\n"
-appver="1.0, R.3"
+appver="1.0, R.4"
 apptitle="WAIDPS"
 appDesc="- The Wireless Auditing, Intrusion Detection & Prevention System"
 appcreated="28 Feb 2014"
-appupdated="3 Jul 2014"
+appupdated="06 Jul 2014"
 appnote="Written By SY Chua, " + appcreated + ", Updated " + appupdated
 appdescription="Wiresless IDS-2 is a whole new application which is design to harvest all WiFi information (AP / Station details) in your surrounding and store as a database for reference. With the stored data, user can further lookup for specific MAC or names for detailed information of it relation to other MAC addresses. It primarily purpose is to detect wireless attacks in WEP/WPA/WPS encryption. It also comes with an analyzer and viewer which allow user to further probe and investigation on the intrusion/suspicious packets captured. Additional features such as blacklisting which allow user to monitor specific MACs/Names's activities. All information captured can also be saved into pcap files for further investigation."
 class fcolor:
@@ -127,81 +120,7 @@ class fcolor:
     BGIWhite='\033[107m'
 
 def RemoveColor(InText):
-    if InText!="":
-        InText=InText.replace('\033[0m','')
-        InText=InText.replace('\033[1m','')
-        InText=InText.replace('\033[2m','')
-        InText=InText.replace('\033[4m','')
-        InText=InText.replace('\033[5m','')
-        InText=InText.replace('\033[7m','')
-        InText=InText.replace('\033[8m','')
-        InText=InText.replace('\033[1;90m','')
-        InText=InText.replace('\033[0;90m','')
-        InText=InText.replace('\033[30m','')
-        InText=InText.replace('\033[31m','')
-        InText=InText.replace('\033[32m','')
-        InText=InText.replace('\033[33m','')
-        InText=InText.replace('\033[34m','')
-        InText=InText.replace('\033[35m','')
-        InText=InText.replace('\033[36m','')
-        InText=InText.replace('\033[37m','')
-        InText=InText.replace('\033[0;30m','')
-        InText=InText.replace('\033[0;31m','')
-        InText=InText.replace('\033[0;32m','')
-        InText=InText.replace('\033[0;33m','')
-        InText=InText.replace('\033[0;34m','')
-        InText=InText.replace('\033[0;35m','')
-        InText=InText.replace('\033[0;36m','')
-        InText=InText.replace('\033[0;37m','')
-        InText=InText.replace('\033[1;30m','')
-        InText=InText.replace('\033[1;31m','')
-        InText=InText.replace('\033[1;34m','')
-        InText=InText.replace('\033[1;33m','')
-        InText=InText.replace('\033[1;32m','')
-        InText=InText.replace('\033[1;35m','')
-        InText=InText.replace('\033[1;36m','')
-        InText=InText.replace('\033[1;37m','')
-        InText=InText.replace('\033[4;30m','')
-        InText=InText.replace('\033[4;31m','')
-        InText=InText.replace('\033[4;32m','')
-        InText=InText.replace('\033[4;33m','')
-        InText=InText.replace('\033[4;34m','')
-        InText=InText.replace('\033[4;35m','')
-        InText=InText.replace('\033[4;36m','')
-        InText=InText.replace('\033[4;37m','')
-        InText=InText.replace('\033[0;90m','')
-        InText=InText.replace('\033[0;91m','')
-        InText=InText.replace('\033[0;92m','')
-        InText=InText.replace('\033[0;93m','')
-        InText=InText.replace('\033[0;94m','')
-        InText=InText.replace('\033[0;95m','')
-        InText=InText.replace('\033[0;96m','')
-        InText=InText.replace('\033[0;97m','')
-        InText=InText.replace('\033[1;90m','')
-        InText=InText.replace('\033[1;91m','')
-        InText=InText.replace('\033[1;92m','')
-        InText=InText.replace('\033[1;93m','')
-        InText=InText.replace('\033[1;94m','')
-        InText=InText.replace('\033[1;95m','')
-        InText=InText.replace('\033[1;96m','')
-        InText=InText.replace('\033[1;97m','')
-        InText=InText.replace('\033[40m','')
-        InText=InText.replace('\033[41m','')
-        InText=InText.replace('\033[42m','')
-        InText=InText.replace('\033[43m','')
-        InText=InText.replace('\033[44m','')
-        InText=InText.replace('\033[45m','')
-        InText=InText.replace('\033[46m','')
-        InText=InText.replace('\033[47m','')
-        InText=InText.replace('\033[100m','')
-        InText=InText.replace('\033[101m','')
-        InText=InText.replace('\033[102m','')
-        InText=InText.replace('\033[103m','')
-        InText=InText.replace('\033[104m','')
-        InText=InText.replace('\033[105m','')
-        InText=InText.replace('\033[106m','')
-        InText=InText.replace('\033[107m','')
-    return InText;
+    return color_pattern.sub('',InText);
 
 def BeepSound():
     if __builtin__.ALERTSOUND=="Yes":
@@ -1038,6 +957,7 @@ def OptAuditing(HeaderLine):
             printc (" ", fcolor.SGreen + "WPA Passphase    : " + fcolor.BRed + str(__builtin__.DB_ENCKEY) + fcolor.SGreen + fcolor.SGreen + " [ "  + fcolor.SWhite + str(len(__builtin__.DB_ENCKEY)) + " Characters " + fcolor.SGreen + " ]","")
         if str(__builtin__.DB_WPS)!="":
             printc (" ", fcolor.SGreen + "WPS PIN          : " + fcolor.BYellow + str(__builtin__.DB_WPS) ,"")
+        printc (" ", fcolor.SGreen + "Cracked Date     : " + fcolor.BYellow + str(__builtin__.DB_Date) ,"")
         print ""
         usr_resp=AskQuestion(fcolor.BGreen + "Proceed to re-crack ?" + fcolor.BGreen,"y/N","U","N","1")
         LineBreak()
@@ -1183,6 +1103,7 @@ def MonitorAccessPoint(TargetMAC,Auto):
                         NewClient=fcolor.BGreen + " [New Detected]"
                     ActiveStatus=AddClientMAC(__builtin__.CUR_CLIENT[cl],__builtin__.CUR_CLIENT_DATA[cl])
                     Elapse=CalculateTime (str(__builtin__.CUR_CLIENT_FS[cl]).lstrip().rstrip(),str(__builtin__.CUR_CLIENT_LS[cl]).lstrip().rstrip())
+##                    print "__builtin__.CUR_CLIENT_LS[cl] : " + str(__builtin__.CUR_CLIENT_LS[cl])
                     MC=fcolor.SWhite + "" + fcolor.BGreen + __builtin__.CUR_CLIENT[cl] + "  " + str(ActiveStatus) + fcolor.SWhite + str(__builtin__.CUR_CLIENT_FS[cl]) + " " + str(__builtin__.CUR_CLIENT_LS[cl]) + "  " + fcolor.SBlack + str(__builtin__.TimeGapFull).ljust(10) + fcolor.SYellow + str(__builtin__.CUR_CLIENT_PWR[cl]).ljust(5) + fcolor.SGreen + str(__builtin__.CUR_CLIENT_DATA[cl]).ljust(12)  + fcolor.SCyan + str(OUI) + fcolor.SPink + " " + str(NewClient)
                     CP=str(__builtin__.CUR_CLIENT_PWR[cl]).lstrip().rstrip()[1:]
                     AP=str(__builtin__.ATTACK_AP_PWR)[1:]
@@ -1248,6 +1169,17 @@ def MonitorAccessPoint(TargetMAC,Auto):
         
         if MONITORING_STOP=="":
             if retkey=="":
+                TMPF=str(__builtin__.CapFile).replace(".cap",".csv")
+                __builtin__.Captured_CSV=TMPF
+                TMPF=str(__builtin__.CapFile).replace(".cap",".kismet.csv")
+                __builtin__.Captured_Kismet=TMPF
+                RewriteCSV()
+                ExtractDump("1")
+                EnrichDump()
+                ExtractClient()
+                WriteAllStationDB()
+                __builtin__.Captured_CSV=tmpdir + "Collect-Dump-01.csv"
+                __builtin__.Captured_Kismet=tmpdir + "Collect-Dump-01.kismet.csv"
                 retkey=WaitProcessing(WAITRATE,1)
             while retkey!="":
                 LineBreak()
@@ -2078,6 +2010,7 @@ def AttackWPAProc(TargetMAC,TargetChannel,ClentList,Auto):
     LineBreak()
     if IsFileDirExist(__builtin__.HS_FileStrictFull)=="F":
         CrackWPAKey(__builtin__.HS_File,"1")
+#     
     printc ("x","","")
     OptAuditing("")
  
@@ -2274,7 +2207,7 @@ def CheckHandshake(capfile,TargetMAC,ESSID):
                 FRTOMAC=str(TOMAC) + str(ARW) + str(FRMAC)
             Result1=Find2MACIndex(FRTOMAC, HANDSHAKE_LIST1)
             Result2=Find2MACIndex(FRTOMAC, HANDSHAKE_LIST2)
-            if Result1==-1:	
+            if Result1==-1:	# and Result2==-1:
                 HANDSHAKE_LIST1.append (str(FRTOMAC))
                 HANDSHAKE_LIST1R.append (str(M1))
                 HANDSHAKE_LIST3.append (str(FRTOMAC))
@@ -2521,13 +2454,14 @@ def AttackWPSProc(TargetMAC,TargetChannel,ClentList,Auto):
     if int(__builtin__.ATTACK_AP_CH)>14:
         CH5GHZ=" -5"
     Para=CH5GHZ + "--dh-small --win7 "
+##    Para=WPSAddOnPara(Para,"1")
     printc (" ",fcolor.BRed + "1" + fcolor.SWhite + " - Non Aggresive Mode (Slow - Help prevent locking on some AP","")
     printc (" ",fcolor.BRed + "2" + fcolor.SWhite + " - Aggresive Mode (Fast - Only useful on non-lockable AP","")
     usr_resp=AskQuestion(fcolor.BGreen + "Select an option ","1/2 " + fcolor.SWhite + "Default - " + fcolor.BRed + "1" ,"U","1","1")
     if usr_resp=="2":
-        Para=CH5GHZ + "--dh-small --win7 "
+        Para=CH5GHZ + "--dh-small --nack --eap-terminate --win7 "
     if usr_resp=="1":
-        Para=CH5GHZ + "--dh-small --nack --eap-terminate --win7 -r 3:180 -d 3"
+        Para=CH5GHZ + "--dh-small --nack --eap-terminate --win7 -r 3:90 -d 3"
     __builtin__.TStart=Now()
     printc ("i",fcolor.BGreen + "Time Start : " + fcolor.SWhite + str(__builtin__.TStart),"")
     print ""
@@ -2926,179 +2860,6 @@ def GetClientFromCSV(sFile):
                                 __builtin__.NEW_CLIENT_PROBE.append (str(PROBE_DETAIL))
                                 
     return FOUNDCLIENTS;
-
-def ExtractDump():
-    if __builtin__.DumpProc!="":
-        KillSubProc(str(__builtin__.DumpProc))
-    RunAirodump()
-    cmdLine="ps -eo pid | grep '" + str(__builtin__.DumpProc) + "'"
-    ps=subprocess.Popen(cmdLine , shell=True, stdout=subprocess.PIPE)	
-    readout=str(ps.stdout.read().replace("\n",""))
-    readout=str(readout).lstrip().rstrip()
-    ps.wait();ps.stdout.close()
-    __builtin__.DumpProc=str(__builtin__.DumpProc)
-    if str(readout)!=str(__builtin__.DumpProc):
-        printc ("!", "[Network Monitor stopped - Restarting]","")
-        RunAirodump()
-        time.sleep(1)
-    cmdLine="ps -eo pid | grep '" + str(__builtin__.WashProc) + "'"
-    __builtin__.WashProc=str(__builtin__.WashProc)
-    ps=subprocess.Popen(cmdLine , shell=True, stdout=subprocess.PIPE)	
-    readout=str(ps.stdout.read().replace("\n",""))
-    readout=str(readout).lstrip().rstrip()
-    ps.wait();ps.stdout.close()
-    if str(readout)=="" or readout!=str(__builtin__.WashProc):
-        if __builtin__.LOAD_WPS=="Yes" and __builtin__.FIXCHANNEL==0:
-            printc ("!", "[WPS Monitor stopped - Restarting]","")
-            RunWash()
-            time.sleep(1)
-    LineList = []
-    Encryption = []
-    __builtin__.ListInfo_Exist = 0
-    __builtin__.ListInfo_Add = 0
-    if IsFileDirExist(__builtin__.NewCaptured_Kismet)=="F":
-        with open(__builtin__.NewCaptured_Kismet,"r") as f:
-            for line in f:
-                line=line.replace("\n","")
-                line=line.replace("\00","")
-                if line.find("Network;NetType;ESSID;BSSID;Info;Channel")==-1 and len(line)>10:
-                    line=line + "0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;"
-                    LineList=line.split(";")
-                    BSSID=LineList[3]
-                    if len(BSSID)==17:
-                        ESSID=LineList[2]
-                        if len(ESSID)==0:
-                            ESSID=""
-                        if len(ESSID)>=32:
-                            ESSID=ESSID[:-32]
-                        x=0
-                        foundloc=0
-                        Skip=""
-                        mi=FindMACIndex(BSSID,ListInfo_BSSID)
-                        if mi!=-1:
-                            foundloc=mi
-                            Skip="1"
-                            if IsAscii(ESSID)==True and ESSID.find("\\x")==-1:
-                                if ListInfo_BSSID[foundloc]==BSSID:
-                                    if ListInfo_ESSID[foundloc]!="" and IsAscii(ESSID)==True and ESSID.find("\\x")==-1:
-                                        ESSID=ListInfo_ESSID[foundloc]
-                        QualityPercent=0
-                        QRange=fcolor.SBlack + "Unknown"
-                        if len(LineList[21])>1 and len(LineList[21])<4:
-                            if str(LineList[21])=="No" or str(LineList[21])=="Yes":
-                                LineList[21]=-1
-                            QualityPercent=int(100 + int(LineList[21]))
-                            if QualityPercent>=99 or QualityPercent==0:  
-                                QRange=fcolor.SBlack + "Unknown"
-                            if QualityPercent>=70 and QualityPercent<=98:
-                                QRange=fcolor.SGreen + "V.Good"
-                            if QualityPercent>=50 and QualityPercent<=69:
-                                QRange=fcolor.SGreen + "Good"
-                            if QualityPercent>=26 and QualityPercent<=49:
-                                QRange=fcolor.SYellow + "Average"
-                            if QualityPercent>=1 and QualityPercent<=25:
-                                QRange=fcolor.SRed + "Poor"
-                        Encryption=LineList[7].split(",")
-                        Encryption.append ("-");Encryption.append ("-");Encryption.append ("-")
-                        Privacy="";Ciper="";Auth=""
-                        Privacy=Encryption[0];Ciper=Encryption[1];Auth=Encryption[2];
-                        HiddenSSID="No"
-                        if len(LineList[2])==0:
-                            HiddenSSID="Yes"
-                        BSSID_OUI=Check_OUI(BSSID,"")
-                        StartTime=LineList[19].lstrip().rstrip()
-                        StartTime2=str(LineList[19]).lstrip().rstrip()
-                        EndTime=LineList[20].lstrip().rstrip()
-                        StartTime=ConvertDateFormat(StartTime,"%c")
-                        EndTime=ConvertDateFormat(EndTime,"%c")
-                        if Skip=="":
-                            __builtin__.ListInfo_Add += 1
-                            ListInfo_ESSID.append (ESSID)
-                            ListInfo_HiddenSSID.append (HiddenSSID)
-                            ListInfo_BSSIDTimes.append ("1")
-                            ListInfo_BSSID.append (LineList[3])
-                            ListInfo_Channel.append (LineList[5])
-                            ListInfo_APStandard.append ("-")
-                            ListInfo_ESS.append ("-")
-                            ListInfo_Cloaked.append (LineList[6])
-                            ListInfo_Privacy.append (Privacy)
-                            ListInfo_Cipher.append (Ciper)
-                            ListInfo_Auth.append (Auth)
-                            ListInfo_MaxRate.append (LineList[9])
-                            ListInfo_Beacon.append (LineList[11])
-                            ListInfo_Data.append (LineList[13])
-                            ListInfo_Total.append (LineList[16])
-                            ListInfo_FirstSeen.append (StartTime)
-                            ListInfo_LastSeen.append (EndTime)
-                            ListInfo_BestQuality.append (LineList[21])
-                            ListInfo_BestSignal.append (LineList[22])
-                            ListInfo_BestNoise.append (LineList[23])
-                            ListInfo_GPSBestLat.append (LineList[32])
-                            ListInfo_GPSBestLon.append (LineList[33])
-                            ListInfo_GPSBestAlt.append (LineList[34])
-                            ListInfo_QualityRange.append(QRange)
-                            ListInfo_QualityPercent.append (str(QualityPercent))
-                            ListInfo_BSSID_OUI.append(BSSID_OUI)
-                            ListInfo_WPS.append (str("-"))
-                            ListInfo_WPSVer.append (str("-"))
-                            ListInfo_WPSLock.append (str("-"))
-                            ListInfo_ConnectedClient.append ("0")
-                            __builtin__.ListInfo_Freq.append (str(GetFrequency(LineList[5])))
-                            __builtin__.ListInfo_Signal.append (str("-"))
-                            __builtin__.ListInfo_Enriched.append (str(""))
-                            __builtin__.ListInfo_Quality.append (str("-"))
-                            __builtin__.ListInfo_BitRate.append (str("-"))
-                            __builtin__.ListInfo_WPAVer.append (str("-"))
-                            __builtin__.ListInfo_PairwiseCipher.append (str("-"))
-                            __builtin__.ListInfo_GroupCipher.append (str("-"))
-                            __builtin__.ListInfo_AuthSuite.append (str("-"))
-                            __builtin__.ListInfo_LastBeacon.append (str("-"))
-                            __builtin__.ListInfo_Mode.append (str("-"))
-                            __builtin__.ListInfo_EncKey.append (str("-"))
-                            Elapse=CalculateTime (StartTime,EndTime)
-                            __builtin__.ListInfo_SSIDElapse.append (Elapse)
-                            __builtin__.ListInfo_SSIDTimeGap.append (__builtin__.TimeGap)
-                            __builtin__.ListInfo_SSIDTimeGapFull.append (__builtin__.TimeGapFull)
-                        else:
-                            __builtin__.ListInfo_Exist += 1
-                            Times=ListInfo_BSSIDTimes[foundloc]
-                            Times=int(Times)+1
-                            ListInfo_BSSIDTimes[foundloc]=Times
-                            ListInfo_HiddenSSID[foundloc]= HiddenSSID
-                            ListInfo_BSSID[foundloc] = LineList[3]
-                            if LineList[5]>0:
-                                ListInfo_Channel[foundloc] =  LineList[5]
-                            ListInfo_Cloaked[foundloc] = LineList[6]
-                            if __builtin__.ListInfo_Enriched[foundloc]!="Yes":
-                                ListInfo_Privacy[foundloc] = Privacy
-                                ListInfo_Cipher[foundloc] = Ciper
-                                ListInfo_Auth[foundloc] = Auth
-                            if ESSID!="":
-                                if str(ESSID).find("...")==-1 and str(ESSID).find("\\x")==-1:
-                                    ListInfo_ESSID[foundloc] = ESSID
-                                else:
-                                    if str(ListInfo_ESSID[foundloc])== "":
-                                        ListInfo_ESSID[foundloc] = ESSID
-                            ListInfo_MaxRate[foundloc] = LineList[9]
-                            ListInfo_Beacon[foundloc] = LineList[11]
-                            ListInfo_Data[foundloc] = LineList[13]
-                            ListInfo_Total[foundloc] = LineList[16]
-                            ListInfo_FirstSeen[foundloc] = StartTime
-                            ListInfo_LastSeen[foundloc] = EndTime
-                            ListInfo_BestQuality[foundloc] = LineList[21]
-                            ListInfo_BestSignal[foundloc] = LineList[22]
-                            ListInfo_BestNoise[foundloc] = LineList[23]
-                            ListInfo_GPSBestLat[foundloc] = LineList[32]
-                            ListInfo_GPSBestLon[foundloc] = LineList[33]
-                            ListInfo_GPSBestAlt[foundloc] = LineList[34]
-                            ListInfo_QualityRange[foundloc] = QRange
-                            ListInfo_QualityPercent[foundloc] = str(QualityPercent)
-                            ListInfo_BSSID_OUI[foundloc] = str(BSSID_OUI)
-                            ListInfo_ConnectedClient[foundloc]="0"
-                            Elapse=CalculateTime (StartTime,EndTime)
-                            __builtin__.ListInfo_SSIDElapse[foundloc]= str(Elapse)
-                            __builtin__.ListInfo_SSIDTimeGap[foundloc]= __builtin__.TimeGap
-                            __builtin__.ListInfo_SSIDTimeGapFull[foundloc]= __builtin__.TimeGapFull
 
 def RerunCapturedFile(TargetMAC,TargetChannel):
     __builtin__.ATTACK_AP_PDATA=""
@@ -3866,6 +3627,9 @@ def CheckCrackDB(BSSID):
                     tmpESSID=str(tmpline[3])
                     tmpHSFILE=str(tmpline[4])
                     tmpWPS=str(tmpline[5])
+                    tmpDate="-"
+                    if len(tmpline)>6:
+                        tmpDate=str(tmpline[6])
                     if str(tmpBSSID).upper()==str(BSSID).upper():
                         FOUND="1"
                     if str(tmpHSFILE)!="" and str(tmpHSFILE)==str(BSSID):
@@ -3877,6 +3641,7 @@ def CheckCrackDB(BSSID):
                         __builtin__.DB_ESSID=tmpESSID
                         __builtin__.DB_HSFILE=tmpHSFILE
                         __builtin__.DB_WPS=tmpWPS
+                        __builtin__.DB_Date=tmpDate
     return FOUND
 
 def AddCrackDB(BSSID,Enc,EncKey,ESSID,HS_File,WPS):
@@ -3885,11 +3650,11 @@ def AddCrackDB(BSSID,Enc,EncKey,ESSID,HS_File,WPS):
         FOUND=""
         IGNORE=""
         with open(CrackDB,"r") as f:
+            MODI=""
             for line in f:
                 line=line.replace("\n","").replace("\00","")
                 if str(line)!="":
                     x=0
-                    MODI=""
                     tabstr=";"
                     WPA_HS=""
                     tmpline=str(line).split(";")
@@ -3899,6 +3664,7 @@ def AddCrackDB(BSSID,Enc,EncKey,ESSID,HS_File,WPS):
                     tmpESSID=str(tmpline[3])
                     tmpHSFile=str(tmpline[4])
                     tmpWPS=str(tmpline[5])
+                    tmpDate=Now()
                     if str(HS_File)!="" and FOUND=="":
                         if str(tmpHSFile)==str(HS_File) and str(tmpBSSID).upper()==str(BSSID).upper():
                             WPA_HS="1";FOUND="1"
@@ -3936,7 +3702,7 @@ def AddCrackDB(BSSID,Enc,EncKey,ESSID,HS_File,WPS):
                             if usr_resp=="Y":
                                 tmpWPS=str(WPS)
                                 MODI="1"
-                    datal=str(tmpBSSID) + str(tabstr) + str(tmpEnc) + str(tabstr) + str(tmpEncKey) + str(tabstr) + str(tmpESSID) + ";"+ str(tmpHSFile)+";"+ str(tmpWPS)+";"
+                    datal=str(tmpBSSID) + str(tabstr) + str(tmpEnc) + str(tabstr) + str(tmpEncKey) + str(tabstr) + str(tmpESSID) + ";"+ str(tmpHSFile)+";"+ str(tmpWPS)+";"+ str(tmpDate)+";"
                     newline=newline + datal + "\n"
             if WPS!="":
                 DWPS="WPS PIN : " + str(WPS)
@@ -3946,17 +3712,17 @@ def AddCrackDB(BSSID,Enc,EncKey,ESSID,HS_File,WPS):
                 printc ("i", "Modification made to existing BSSID : " + BSSID + ", ESSID : " + str(ESSID) + ", Enc : " + str(Enc) + ", Key : " + str(EncKey) + "  " + str(DWPS) + "...","")
                 IGNORE="1"
                 FOUND=""
-            if MODI=="" and FOUND!="" and IGNORE=="":
-                printc ("i", "Existing informatino already found in database....","")
+            elif MODI=="" and FOUND!="" and IGNORE=="":
+                printc ("i", "Existing information already found in database....","")
                 IGNORE="1"
                 FOUND=""
-            if FOUND=="" and IGNORE=="":
+            elif FOUND=="" and IGNORE=="":
                 printc ("i", fcolor.BGreen + "New BSSID : " + BSSID + ", ESSID : " + str(ESSID) + ", Enc : " + str(Enc) + ", Key : " + str(EncKey) + "  " + str(DWPS) +  " added to database...","")
                 if str(HS_File)!="":
                     printc (" ", fcolor.SGreen + "Handshake File : " + fcolor.BYellow + str(HS_File),"")
-                    newline=newline + str(BSSID) + str(tabstr) + str(Enc) + str(tabstr) + str(EncKey) + str(tabstr) + str(ESSID) + str(tabstr) + str(HS_File) + str(tabstr) + str(WPS) + str(tabstr) + "\n"
+                    newline=newline + str(BSSID) + str(tabstr) + str(Enc) + str(tabstr) + str(EncKey) + str(tabstr) + str(ESSID) + str(tabstr) + str(HS_File) + str(tabstr) + str(WPS) + str(tabstr)+ str(tmpDate)+ str(tabstr) + "\n"
                 else:
-                    newline=newline + str(BSSID) + str(tabstr) + str(Enc) + str(tabstr) + str(EncKey) + str(tabstr) + str(ESSID) + str(tabstr) + "" + str(tabstr)  + str(WPS) + str(tabstr) + "\n"
+                    newline=newline + str(BSSID) + str(tabstr) + str(Enc) + str(tabstr) + str(EncKey) + str(tabstr) + str(ESSID) + str(tabstr) + "" + str(tabstr)  + str(WPS) + str(tabstr) + str(tmpDate)+ str(tabstr) + "\n"
   
         open(CrackDB,"w").write(newline)
 
@@ -7415,7 +7181,6 @@ def exit_gracefully(code=0):
         print fcolor.BWhite + "Please support by liking my page at " + fcolor.BBlue + "https://www.facebook.com/syworks" +fcolor.BWhite + " (SYWorks-Programming)"
     print fcolor.BRed + __builtin__.ScriptName + " Exited." 
     print ''
-    readline.write_history_file(__builtin__.CommandHistory)
     exit(code)
 
 def AddTime(tm, secs):
@@ -7591,7 +7356,7 @@ def CreateDatabaseFiles():
         print ""
         printc (".",fcolor.BGreen + "Creating database files....","")
         if IsFileDirExist(DBFile1)!="F":
-            WriteData="Station;Connected BSSID;AP First Seen;Client First Seen;Reported;Hotspot ESSID;\n"
+            WriteData="Station;Connected BSSID;AP First Seen;Client First Seen;Reported;Hotspot ESSID;Crack Date;;\n"
             open(DBFile1,"a+b").write(WriteData)
         if IsFileDirExist(DBFile2)!="F":
             WriteData="BSSID;Enriched;Mode;First Seen;Last Seen;Channel;Privacy;Cipher;Authentication;Max Rate;Bit Rates;Power;GPS Lat;GPS Lon;GPS Alt;WPS;WPS Ver;Reported;ESSID;\n"
@@ -13179,7 +12944,7 @@ def CreateMonitor(CMD,DontSpoofATK):
 def HarvestingProcess(CMD):
     if CMD=="1":
         RewriteCSV()
-        ExtractDump()
+        ExtractDump("")
         EnrichDump()
         EnrichSSID()
         ExtractWPS()
@@ -13286,7 +13051,7 @@ def Main():
         __builtin__.ERRORFOUND=1
         exit_gracefully(1)
     CheckRequiredFiles()
-    GetHardwareID()
+##    GetHardwareID()
     CreateDatabaseFiles()
     DropFiles()
     GetParameter("1")
@@ -13295,26 +13060,26 @@ def Main():
     DelFile (tmpdir + "Dumps*",1)
     LoadConfig()
     LoadPktConfig()
-    if __builtin__.HWID!=__builtin__.HWID_Saved:
-        if __builtin__.HWID_Saved=="":
-            __builtin__.HWID_Saved=__builtin__.HWID
-        else:
-            printc ("!!!","Hardware ID is different, decryption of encrypted data would not be possible.","")
-            printc ("!!!","If you choose to update with new hardware ID, all existing encrypted will be deleted..","")
-            usr_resp=AskQuestion(fcolor.BRed + "Continue and update new Hardware ID ?" + fcolor.BGreen,"y/N","U","N","1")
-            if usr_resp=="Y":
-                SaveConfig("")
-                RestartApplication()
-            else:
-                exit_gracefully(1)
-    usr=os.getlogin()
-    if __builtin__.USERNAME=="":
-        __builtin__.USERNAME=usr
-        __builtin__.USERHASH=MD5(__builtin__.USERNAME,"h")
-        SaveConfig("")
-    if __builtin__.USERPASS=="":
-        EnterUserPassword("1")
-        print ""
+##    if __builtin__.HWID!=__builtin__.HWID_Saved:
+##        if __builtin__.HWID_Saved=="":
+##            __builtin__.HWID_Saved=__builtin__.HWID
+##        else:
+##            printc ("!!!","Hardware ID is different, decryption of encrypted data would not be possible.","")
+##            printc ("!!!","If you choose to update with new hardware ID, all existing encrypted will be deleted..","")
+##            usr_resp=AskQuestion(fcolor.BRed + "Continue and update new Hardware ID ?" + fcolor.BGreen,"y/N","U","N","1")
+##            if usr_resp=="Y":
+##                SaveConfig("")
+##                RestartApplication()
+##            else:
+##                exit_gracefully(1)
+##    usr=os.getlogin()
+##    if __builtin__.USERNAME=="":
+##        __builtin__.USERNAME=usr
+##        __builtin__.USERHASH=MD5(__builtin__.USERNAME,"h")
+##        SaveConfig("")
+##    if __builtin__.USERPASS=="":
+##        EnterUserPassword("1")
+##        print ""
         
     RETRY=0
     __builtin__.PrintToFile=__builtin__.PRINTTOFILE
@@ -13807,7 +13572,7 @@ def Check_OUI(MACAddr,CMD):
                 readout=str(ps.stdout.read().replace("\n","").replace(MACAddr8,"").lstrip().rstrip())
                 ps.wait();ps.stdout.close()
                 if readout!="":
-                    OUI=str(readout)
+                    OUI=str(readout) + fcolor.SBlack + " [4]"
                     return OUI
                 else:
                     cmdLine="grep -w " + str(MACAddr6) + " " + str(__builtin__.MACOUI)
@@ -13815,7 +13580,7 @@ def Check_OUI(MACAddr,CMD):
                     readout=str(ps.stdout.read().replace("\n","").replace(MACAddr6,"").lstrip().rstrip())
                     ps.wait();ps.stdout.close()
                     if readout!="":
-                        OUI=str(readout)
+                        OUI=str(readout) + fcolor.SBlack + " [3]"
                         return OUI
                     else:
                         return "Unknown"
@@ -13824,24 +13589,31 @@ def Check_OUI(MACAddr,CMD):
                 ps=Popen(str(cmdLine), shell=True, stdout=subprocess.PIPE, stderr=open(os.devnull, 'w'),preexec_fn=os.setsid)
                 readout=str(ps.stdout.read().replace("\n","")) #.replace(MACAddr12,"").lstrip().rstrip())
                 if readout!="":
-                    OUI=str(readout)[13:]
+                    OUI=str(readout)[13:] + fcolor.SBlack + " [6]"
                     return OUI
                 else:
                     cmdLine="grep -w " + str(MACAddr9) + " " + str(__builtin__.MACOUI)
                     ps=Popen(str(cmdLine), shell=True, stdout=subprocess.PIPE, stderr=open(os.devnull, 'w'),preexec_fn=os.setsid)
                     readout=str(ps.stdout.read().replace("\n","")) #.replace(MACAddr9,"").lstrip().rstrip())
                     if readout!="":
-                        OUI=str(readout)[10:]
+                        OUI=str(readout)[10:]+ fcolor.SBlack + " [5]"
                         return OUI
                     else:
-                        cmdLine="grep -w " + str(MACAddr6) + " " + str(__builtin__.MACOUI)
+                        cmdLine="grep -w " + str(MACAddr8) + " " + str(__builtin__.MACOUI)
                         ps=Popen(str(cmdLine), shell=True, stdout=subprocess.PIPE, stderr=open(os.devnull, 'w'),preexec_fn=os.setsid)
-                        readout=str(ps.stdout.read().replace("\n","")) #.replace(MACAddr6,"").lstrip().rstrip())
+                        readout=str(ps.stdout.read().replace("\n","")) #.replace(MACAddr8,"").lstrip().rstrip())
                         if readout!="":
-                            OUI=str(readout)[7:]
+                            OUI=str(readout)[9:]+ fcolor.SBlack + " [4]"
                             return OUI
                         else:
-                            return "Unknown"
+                            cmdLine="grep -w " + str(MACAddr6) + " " + str(__builtin__.MACOUI)
+                            ps=Popen(str(cmdLine), shell=True, stdout=subprocess.PIPE, stderr=open(os.devnull, 'w'),preexec_fn=os.setsid)
+                            readout=str(ps.stdout.read().replace("\n","")) #.replace(MACAddr6,"").lstrip().rstrip())
+                            if readout!="":
+                                OUI=str(readout)[7:]+ fcolor.SBlack + " [3]"
+                                return OUI
+                            else:
+                                return "Unknown"
                 return "Unknown"
 
 def GetScreenWidth():
@@ -14857,31 +14629,206 @@ def EnrichDump():
                             x=len(ListInfo_BSSID)
                         x=x+1
 
-def ExtractDump():
-    if __builtin__.DumpProc!="":
-        KillSubProc(str(__builtin__.DumpProc))
-    RunAirodump()
-    cmdLine="ps -eo pid | grep '" + str(__builtin__.DumpProc) + "'"
-    ps=subprocess.Popen(cmdLine , shell=True, stdout=subprocess.PIPE)	
-    readout=str(ps.stdout.read().replace("\n",""))
-    readout=str(readout).lstrip().rstrip()
-    ps.wait();ps.stdout.close()
-    __builtin__.DumpProc=str(__builtin__.DumpProc)
-    if str(readout)!=str(__builtin__.DumpProc):
-        printc ("!", "[Network Monitor stopped - Restarting]","")
+def ExtractDump(NoKill):
+    if NoKill=="":
+        if __builtin__.DumpProc!="":
+            KillSubProc(str(__builtin__.DumpProc))
         RunAirodump()
-        time.sleep(1)
-    cmdLine="ps -eo pid | grep '" + str(__builtin__.WashProc) + "'"
-    __builtin__.WashProc=str(__builtin__.WashProc)
-    ps=subprocess.Popen(cmdLine , shell=True, stdout=subprocess.PIPE)	
-    readout=str(ps.stdout.read().replace("\n",""))
-    readout=str(readout).lstrip().rstrip()
-    ps.wait();ps.stdout.close()
-    if str(readout)=="" or readout!=str(__builtin__.WashProc):
-        if __builtin__.LOAD_WPS=="Yes" and __builtin__.FIXCHANNEL==0:
-            printc ("!", "[WPS Monitor stopped - Restarting]","")
-            RunWash()
+        cmdLine="ps -eo pid | grep '" + str(__builtin__.DumpProc) + "'"
+        ps=subprocess.Popen(cmdLine , shell=True, stdout=subprocess.PIPE)	
+        readout=str(ps.stdout.read().replace("\n",""))
+        readout=str(readout).lstrip().rstrip()
+        ps.wait();ps.stdout.close()
+        __builtin__.DumpProc=str(__builtin__.DumpProc)
+        if str(readout)!=str(__builtin__.DumpProc):
+            printc ("!", "[Network Monitor stopped - Restarting]","")
+            RunAirodump()
             time.sleep(1)
+        cmdLine="ps -eo pid | grep '" + str(__builtin__.WashProc) + "'"
+        __builtin__.WashProc=str(__builtin__.WashProc)
+        ps=subprocess.Popen(cmdLine , shell=True, stdout=subprocess.PIPE)	
+        readout=str(ps.stdout.read().replace("\n",""))
+        readout=str(readout).lstrip().rstrip()
+        ps.wait();ps.stdout.close()
+        if str(readout)=="" or readout!=str(__builtin__.WashProc):
+            if __builtin__.LOAD_WPS=="Yes" and __builtin__.FIXCHANNEL==0:
+                printc ("!", "[WPS Monitor stopped - Restarting]","")
+                RunWash()
+                time.sleep(1)
+    LineList = []
+    Encryption = []
+    __builtin__.ListInfo_Exist = 0
+    __builtin__.ListInfo_Add = 0
+    if IsFileDirExist(__builtin__.NewCaptured_Kismet)=="F":
+        with open(__builtin__.NewCaptured_Kismet,"r") as f:
+            for line in f:
+                line=line.replace("\n","")
+                line=line.replace("\00","")
+                if line.find("Network;NetType;ESSID;BSSID;Info;Channel")==-1 and len(line)>10:
+                    line=line + "0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;"
+                    LineList=line.split(";")
+                    BSSID=LineList[3]
+                    if len(BSSID)==17:
+                        ESSID=LineList[2]
+                        if len(ESSID)==0:
+                            ESSID=""
+                        if len(ESSID)>=32:
+                            ESSID=ESSID[:-32]
+                        x=0
+                        foundloc=0
+                        Skip=""
+                        mi=FindMACIndex(BSSID,ListInfo_BSSID)
+                        if mi!=-1:
+                            foundloc=mi
+                            Skip="1"
+                            if IsAscii(ESSID)==True and ESSID.find("\\x")==-1:
+                                if ListInfo_BSSID[foundloc]==BSSID:
+                                    if ListInfo_ESSID[foundloc]!="" and IsAscii(ESSID)==True and ESSID.find("\\x")==-1:
+                                        ESSID=ListInfo_ESSID[foundloc]
+                        QualityPercent=0
+                        QRange=fcolor.SBlack + "Unknown"
+                        if len(LineList[21])>1 and len(LineList[21])<4:
+                            if str(LineList[21])=="No" or str(LineList[21])=="Yes":
+                                LineList[21]=-1
+                            QualityPercent=int(100 + int(LineList[21]))
+                            if QualityPercent>=99 or QualityPercent==0:  
+                                QRange=fcolor.SBlack + "Unknown"
+                            if QualityPercent>=70 and QualityPercent<=98:
+                                QRange=fcolor.SGreen + "V.Good"
+                            if QualityPercent>=50 and QualityPercent<=69:
+                                QRange=fcolor.SGreen + "Good"
+                            if QualityPercent>=26 and QualityPercent<=49:
+                                QRange=fcolor.SYellow + "Average"
+                            if QualityPercent>=1 and QualityPercent<=25:
+                                QRange=fcolor.SRed + "Poor"
+                        Encryption=LineList[7].split(",")
+                        Encryption.append ("-");Encryption.append ("-");Encryption.append ("-")
+                        Privacy="";Ciper="";Auth=""
+                        Privacy=Encryption[0];Ciper=Encryption[1];Auth=Encryption[2];
+                        HiddenSSID="No"
+                        if len(LineList[2])==0:
+                            HiddenSSID="Yes"
+                        BSSID_OUI=Check_OUI(BSSID,"")
+                        StartTime=LineList[19].lstrip().rstrip()
+                        StartTime2=str(LineList[19]).lstrip().rstrip()
+                        EndTime=LineList[20].lstrip().rstrip()
+                        StartTime=ConvertDateFormat(StartTime,"%c")
+                        EndTime=ConvertDateFormat(EndTime,"%c")
+                        if Skip=="":
+                            __builtin__.ListInfo_Add += 1
+                            ListInfo_ESSID.append (ESSID)
+                            ListInfo_HiddenSSID.append (HiddenSSID)
+                            ListInfo_BSSIDTimes.append ("1")
+                            ListInfo_BSSID.append (LineList[3])
+                            ListInfo_Channel.append (LineList[5])
+                            ListInfo_APStandard.append ("-")
+                            ListInfo_ESS.append ("-")
+                            ListInfo_Cloaked.append (LineList[6])
+                            ListInfo_Privacy.append (Privacy)
+                            ListInfo_Cipher.append (Ciper)
+                            ListInfo_Auth.append (Auth)
+                            ListInfo_MaxRate.append (LineList[9])
+                            ListInfo_Beacon.append (LineList[11])
+                            ListInfo_Data.append (LineList[13])
+                            ListInfo_Total.append (LineList[16])
+                            ListInfo_FirstSeen.append (StartTime)
+                            ListInfo_LastSeen.append (EndTime)
+                            ListInfo_BestQuality.append (LineList[21])
+                            ListInfo_BestSignal.append (LineList[22])
+                            ListInfo_BestNoise.append (LineList[23])
+                            ListInfo_GPSBestLat.append (LineList[32])
+                            ListInfo_GPSBestLon.append (LineList[33])
+                            ListInfo_GPSBestAlt.append (LineList[34])
+                            ListInfo_QualityRange.append(QRange)
+                            ListInfo_QualityPercent.append (str(QualityPercent))
+                            ListInfo_BSSID_OUI.append(BSSID_OUI)
+                            ListInfo_WPS.append (str("-"))
+                            ListInfo_WPSVer.append (str("-"))
+                            ListInfo_WPSLock.append (str("-"))
+                            ListInfo_ConnectedClient.append ("0")
+                            __builtin__.ListInfo_Freq.append (str(GetFrequency(LineList[5])))
+                            __builtin__.ListInfo_Signal.append (str("-"))
+                            __builtin__.ListInfo_Enriched.append (str(""))
+                            __builtin__.ListInfo_Quality.append (str("-"))
+                            __builtin__.ListInfo_BitRate.append (str("-"))
+                            __builtin__.ListInfo_WPAVer.append (str("-"))
+                            __builtin__.ListInfo_PairwiseCipher.append (str("-"))
+                            __builtin__.ListInfo_GroupCipher.append (str("-"))
+                            __builtin__.ListInfo_AuthSuite.append (str("-"))
+                            __builtin__.ListInfo_LastBeacon.append (str("-"))
+                            __builtin__.ListInfo_Mode.append (str("-"))
+                            __builtin__.ListInfo_EncKey.append (str("-"))
+                            Elapse=CalculateTime (StartTime,EndTime)
+                            __builtin__.ListInfo_SSIDElapse.append (Elapse)
+                            __builtin__.ListInfo_SSIDTimeGap.append (__builtin__.TimeGap)
+                            __builtin__.ListInfo_SSIDTimeGapFull.append (__builtin__.TimeGapFull)
+                        else:
+                            __builtin__.ListInfo_Exist += 1
+                            Times=ListInfo_BSSIDTimes[foundloc]
+                            Times=int(Times)+1
+                            ListInfo_BSSIDTimes[foundloc]=Times
+                            ListInfo_HiddenSSID[foundloc]= HiddenSSID
+                            ListInfo_BSSID[foundloc] = LineList[3]
+                            if LineList[5]>0:
+                                ListInfo_Channel[foundloc] =  LineList[5]
+                            ListInfo_Cloaked[foundloc] = LineList[6]
+                            if __builtin__.ListInfo_Enriched[foundloc]!="Yes":
+                                ListInfo_Privacy[foundloc] = Privacy
+                                ListInfo_Cipher[foundloc] = Ciper
+                                ListInfo_Auth[foundloc] = Auth
+                            if ESSID!="":
+                                if str(ESSID).find("...")==-1 and str(ESSID).find("\\x")==-1:
+                                    ListInfo_ESSID[foundloc] = ESSID
+                                else:
+                                    if str(ListInfo_ESSID[foundloc])== "":
+                                        ListInfo_ESSID[foundloc] = ESSID
+                            ListInfo_MaxRate[foundloc] = LineList[9]
+                            ListInfo_Beacon[foundloc] = LineList[11]
+                            ListInfo_Data[foundloc] = LineList[13]
+                            ListInfo_Total[foundloc] = LineList[16]
+                            ListInfo_FirstSeen[foundloc] = StartTime
+                            ListInfo_LastSeen[foundloc] = EndTime
+                            ListInfo_BestQuality[foundloc] = LineList[21]
+                            ListInfo_BestSignal[foundloc] = LineList[22]
+                            ListInfo_BestNoise[foundloc] = LineList[23]
+                            ListInfo_GPSBestLat[foundloc] = LineList[32]
+                            ListInfo_GPSBestLon[foundloc] = LineList[33]
+                            ListInfo_GPSBestAlt[foundloc] = LineList[34]
+                            ListInfo_QualityRange[foundloc] = QRange
+                            ListInfo_QualityPercent[foundloc] = str(QualityPercent)
+                            ListInfo_BSSID_OUI[foundloc] = str(BSSID_OUI)
+                            ListInfo_ConnectedClient[foundloc]="0"
+                            Elapse=CalculateTime (StartTime,EndTime)
+                            __builtin__.ListInfo_SSIDElapse[foundloc]= str(Elapse)
+                            __builtin__.ListInfo_SSIDTimeGap[foundloc]= __builtin__.TimeGap
+                            __builtin__.ListInfo_SSIDTimeGapFull[foundloc]= __builtin__.TimeGapFull
+
+def ExtractDump2():
+    if NoKill=="":
+        if __builtin__.DumpProc!="":
+            KillSubProc(str(__builtin__.DumpProc))
+        RunAirodump()
+        cmdLine="ps -eo pid | grep '" + str(__builtin__.DumpProc) + "'"
+        ps=subprocess.Popen(cmdLine , shell=True, stdout=subprocess.PIPE)	
+        readout=str(ps.stdout.read().replace("\n",""))
+        readout=str(readout).lstrip().rstrip()
+        ps.wait();ps.stdout.close()
+        __builtin__.DumpProc=str(__builtin__.DumpProc)
+        if str(readout)!=str(__builtin__.DumpProc):
+            printc ("!", "[Network Monitor stopped - Restarting]","")
+            RunAirodump()
+            time.sleep(1)
+        cmdLine="ps -eo pid | grep '" + str(__builtin__.WashProc) + "'"
+        __builtin__.WashProc=str(__builtin__.WashProc)
+        ps=subprocess.Popen(cmdLine , shell=True, stdout=subprocess.PIPE)	
+        readout=str(ps.stdout.read().replace("\n",""))
+        readout=str(readout).lstrip().rstrip()
+        ps.wait();ps.stdout.close()
+        if str(readout)=="" or readout!=str(__builtin__.WashProc):
+            if __builtin__.LOAD_WPS=="Yes" and __builtin__.FIXCHANNEL==0:
+                printc ("!", "[WPS Monitor stopped - Restarting]","")
+                RunWash()
+                time.sleep(1)
     LineList = []
     Encryption = []
     __builtin__.ListInfo_Exist = 0
@@ -15227,10 +15174,10 @@ def CheckMonitoringMAC():
 
 def SaveConfig(CMD):
     open(ConfigFile,"w").write("WAIDPS Configuration"+ "\n")
-    open(ConfigFile,"a+b").write("Unique HWIdentifier="+str(__builtin__.HWID) + "\n")
-    open(ConfigFile,"a+b").write("USERNAME="+str(__builtin__.USERNAME) + "\n")
-    open(ConfigFile,"a+b").write("USERHASH="+str(__builtin__.USERHASH) + "\n")
-    open(ConfigFile,"a+b").write("USERPASS="+str(__builtin__.USERPASS) + "\n")
+##    open(ConfigFile,"a+b").write("Unique HWIdentifier="+str(__builtin__.HWID) + "\n")
+##    open(ConfigFile,"a+b").write("USERNAME="+str(__builtin__.USERNAME) + "\n")
+##    open(ConfigFile,"a+b").write("USERHASH="+str(__builtin__.USERHASH) + "\n")
+##    open(ConfigFile,"a+b").write("USERPASS="+str(__builtin__.USERPASS) + "\n")
     open(ConfigFile,"a+b").write("DISABLE_BREAK=" + str(DISABLE_BREAK) + "\n")
     open(ConfigFile,"a+b").write("LOAD_WPS=" + str(LOAD_WPS) + "\n")
     open(ConfigFile,"a+b").write("LOAD_IWLIST=" + str(LOAD_IWLIST) + "\n")
@@ -16109,6 +16056,7 @@ def GetHardwareID():
 __builtin__.STxt=fcolor.BRed
 __builtin__.NTxt=fcolor.BYellow
 __builtin__.col=";"
+color_pattern = re.compile('\033\[(\d;\d\d|\d{1,3})m')
 ColorStd=fcolor.SGreen
 ColorStd2=fcolor.SWhite
 ColorDev=fcolor.BBlue
@@ -16500,6 +16448,7 @@ __builtin__.DB_ENCKEY=""
 __builtin__.DB_ESSID=""
 __builtin__.DB_HSFILE=""
 __builtin__.DB_WPS=""
+__builtin__.DB_DATE=""
 __builtin__.DB_HSSAVED="0"
 __builtin__.HS_File=""
 __builtin__.HS_FileFull=""
